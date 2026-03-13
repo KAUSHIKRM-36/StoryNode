@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3001;
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
-    secret: process.env.SECRATE_KEY, // Replace with a secure key
+    secret: process.env.SESSION_SECRET || "dev-storynode_super_secret_key_123",
     resave: false,
     saveUninitialized: true,
     cookie: { secure: false } // Set to true if using HTTPS
