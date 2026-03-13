@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
-const port = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -482,6 +482,6 @@ app.post('/like/:postId', (req, res) => {
 });
 
 // Start the server
-app.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
