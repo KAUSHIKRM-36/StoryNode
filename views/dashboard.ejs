@@ -4,82 +4,370 @@
     <title>Dashboard</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Dashboard Container */
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 40px;
+        }
+
+        .dashboard h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 40px;
+            font-weight: 800;
+            color: #1a1a1a;
+            margin-bottom: 60px;
+            text-align: left;
+            letter-spacing: -1px;
+        }
+
+        /* Controls Section */
+        .dashboard-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+            margin-bottom: 60px;
+        }
+
+        /* Search Form Wrapper */
+        .search-wrapper {
+            width: 100%;
+        }
+
+        .search-form {
+            display: flex;
+            align-items: center;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            width: 100%;
+            max-width: 600px;
+            background: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        }
+
+        .search-form:focus-within {
+            border-color: #0059b3;
+            box-shadow: 0 4px 16px rgba(0, 89, 179, 0.12);
+        }
+
+        .search-form input {
+            flex-grow: 1;
+            padding: 14px 18px;
+            border: none;
+            font-size: 14px;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            color: #1a1a1a;
+        }
+
+        .search-form input::placeholder {
+            color: #999;
+            font-weight: 300;
+        }
+
+        .search-button {
+            background-color: #0059b3;
+            border: none;
+            padding: 14px 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .search-button:hover {
+            background-color: #004080;
+        }
+
+        .search-button i {
+            color: white;
+            font-size: 16px;
+        }
+
+        /* Tabs Container */
+        .tabs-container {
+            display: flex;
+            gap: 12px;
+            border-bottom: 1px solid #e8e8e8;
+            overflow-x: auto;
+            padding-bottom: 0;
+            margin-bottom: 0;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 16px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            position: relative;
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            text-transform: uppercase;
+        }
+
+        .tab-btn i {
+            font-size: 16px;
+        }
+
+        .tab-btn:hover {
+            color: #0059b3;
+        }
+
+        .tab-btn.active {
+            color: #0059b3;
+            font-weight: 700;
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #0059b3, #0099ff);
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Posts Container */
+        .posts-wrapper {
+            margin-top: 40px;
+        }
+
+        .posts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 28px;
+        }
+
+        /* No Posts Message */
+        .no-posts-message {
+            text-align: center;
+            padding: 60px 40px;
+            color: #999;
+            font-size: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .dashboard {
+                padding: 40px 30px;
+            }
+
+            .dashboard h2 {
+                font-size: 32px;
+                margin-bottom: 40px;
+            }
+
+            .posts-container {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 24px;
+            }
+
+            .search-form {
+                max-width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                padding: 30px 20px;
+            }
+
+            .dashboard h2 {
+                font-size: 28px;
+                margin-bottom: 32px;
+            }
+
+            .dashboard-controls {
+                gap: 24px;
+                margin-bottom: 40px;
+            }
+
+            .tabs-container {
+                gap: 8px;
+                margin-bottom: 24px;
+            }
+
+            .tab-btn {
+                padding: 12px 16px;
+                font-size: 12px;
+            }
+
+            .tab-btn i {
+                display: none;
+            }
+
+            .posts-container {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .search-form {
+                max-width: 100%;
+            }
+
+            .search-form input {
+                padding: 12px 14px;
+                font-size: 13px;
+            }
+
+            .search-button {
+                padding: 12px 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .dashboard {
+                padding: 20px 16px;
+            }
+
+            .dashboard h2 {
+                font-size: 24px;
+                margin-bottom: 24px;
+            }
+
+            .tabs-container {
+                gap: 4px;
+                margin-bottom: 16px;
+            }
+
+            .tab-btn {
+                padding: 10px 12px;
+                font-size: 11px;
+            }
+
+            .posts-container {
+                gap: 16px;
+            }
+        }
+    </style>
 </head>
 <body>
-        <!-- Navbar -->
-        <nav class="navbar">
-            <a href="#" class="navbar-brand">Blogging Platform</a>
-            <div class="navbar-links">
-                <a href="/create-post">Create</a>
-               
-                <!-- User Profile Dropdown -->
-                <div class="user-profile">
-                    <i class="fas fa-user-circle" id="profile-icon"></i> <!-- User Icon -->
-                    <div class="dropdown-content" id="dropdown-content">
-                        <i class="fas fa-user-circle"></i> <!-- User Icon -->
-                        <span><%= username %></span> <!-- Display Username -->
-                        <button href="#" id="delete-account-link">Delete Account</button>
-                        <button onclick="window.location.href='/logout';">Logout</button>
-                    </div>
-                </div>
-
-            </div>
-        </nav>
-
-        <!-- Delete Account Confirmation Modal -->
-        <div id="delete-account-modal" class="modal">
-            <div class="modal-content">
-                <h3>Delete Account</h3>
-                <p>Are you sure you want to delete your account? This action cannot be undone.</p>
-                <div class="modal-buttons">
-                    <button id="confirm-delete">Delete</button>
-                    <button id="cancel-delete">Cancel</button>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">Blogging Platform</a>
+        <div class="navbar-links">
+            <a href="/create-post">Create</a>
+           
+            <!-- User Profile Dropdown -->
+            <div class="user-profile">
+                <i class="fas fa-user-circle" id="profile-icon"></i> <!-- User Icon -->
+                <div class="dropdown-content" id="dropdown-content">
+                    <i class="fas fa-user-circle"></i> <!-- User Icon -->
+                    <span><%= username %></span> <!-- Display Username -->
+                    <button href="#" id="delete-account-link">Delete Account</button>
+                    <button onclick="window.location.href='/logout';">Logout</button>
                 </div>
             </div>
         </div>
+    </nav>
 
-    <!-- Dashboard Content -->
-    <div class="dashboard">
-        <h2>   Welcome to Your Dashboard!</h2>
-
-        <!-- Explore Posts Section -->
-        <div class="explore-posts">
-
-            <form action="/search" method="GET" class="search-form">
-               
-                <input type="text" name="query" placeholder="Search posts ..." required>
-
-                <button type="submit" class="search-button">
-                    <i class="fas fa-search"></i> <!-- FontAwesome magnifying lens icon -->
-                </button>
-
-            </form>
-            
-
-            <h3>Explore Posts</h3>
-            
-            <div class="posts-container">
-                <% if (allPosts && allPosts.length > 0) { %>
-                    <% allPosts.forEach(post => { %>
-                        <div class="post-card" onclick="window.location.href='/post/<%= post.id %>'">
-                            <h3><%= post.title %></h3>
-                            <p class="post-content"><%= post.content.substring(0, 150) %>...</p>
-                            <div class="post-meta">
-                                <span class="category"><%= post.category %></span>
-                                <span class="writer">By: <%= post.writer_name %></span>
-                            </div>
-                        </div>
-                    <% }) %>
-                <% } else { %>
-                    <p>No posts found.</p>
-                <% } %>
+    <!-- Delete Account Confirmation Modal -->
+    <div id="delete-account-modal" class="modal">
+        <div class="modal-content">
+            <h2>Delete Account</h2>
+            <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button id="confirm-delete">Delete</button>
+                <button id="cancel-delete">Cancel</button>
             </div>
-            
         </div>
     </div>
 
+    <!-- Dashboard Content -->
+    <div class="dashboard">
+        <h2>Your Dashboard</h2>
 
-    <!-- delete account modal ke liye  -->
+        <!-- Dashboard Controls Section -->
+        <div class="dashboard-controls">
+            <!-- Search Form -->
+            <div class="search-wrapper">
+                <form action="/search" method="GET" class="search-form">
+                    <input type="text" name="query" placeholder="Search posts..." required>
+                    <button type="submit" class="search-button">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="tabs-container">
+                <button class="tab-btn active" data-tab="explore">
+                    <i class="fas fa-compass"></i> Explore Posts
+                </button>
+                <button class="tab-btn" data-tab="suggested">
+                    <i class="fas fa-star"></i> Suggested Posts
+                </button>
+            </div>
+        </div>
+
+        <!-- Explore Posts Section -->
+        <div class="tab-content active" id="explore">
+            <div class="posts-wrapper">
+                <div class="posts-container">
+                    <% if (allPosts && allPosts.length > 0) { %>
+                        <% allPosts.forEach(post => { %>
+                            <div class="post-card">
+                                <div class="post-content-wrapper" onclick="window.location.href='/post/<%= post.id %>'">
+                                    <h3><%= post.title %></h3>
+                                    <p class="post-content"><%= post.content.substring(0, 150) %>...</p>
+                                    <div class="post-meta">
+                                        <span class="category"><%= post.category %></span>
+                                        <span class="writer">By: <%= post.writer_name %></span>
+                                    </div>
+                                </div>
+                                <div class="post-footer">
+                                    <button class="like-btn" data-post-id="<%= post.id %>">
+                                        <i class="far fa-heart"></i>
+                                        <span class="like-count">0</span>
+                                    </button>
+                                </div>
+                            </div>
+                        <% }) %>
+                    <% } else { %>
+                        <div class="no-posts-message">
+                            <p>No posts found. Start exploring or create your first post!</p>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+
+        <!-- Suggested Posts Section -->
+        <div class="tab-content" id="suggested">
+            <div class="posts-wrapper">
+                <div class="posts-container" id="suggested-posts-container">
+                    <div class="no-posts-message">
+                        <p class="loading">Loading suggested posts...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
     <script>
         // Get the modal and links
         const deleteAccountModal = document.getElementById('delete-account-modal');
@@ -96,6 +384,13 @@
         // Close the modal when "Cancel" is clicked
         cancelDeleteButton.addEventListener('click', () => {
             deleteAccountModal.style.display = 'none';
+        });
+    
+        // Close modal when clicking outside of it
+        deleteAccountModal.addEventListener('click', (e) => {
+            if (e.target === deleteAccountModal) {
+                deleteAccountModal.style.display = 'none';
+            }
         });
     
         // Handle account deletion when "Delete" is clicked
@@ -118,6 +413,139 @@
                 alert('An error occurred. Please try again.');
             }
         });
+
+        // Tab switching functionality
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        let suggestedPostsLoaded = false;
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const tabName = button.getAttribute('data-tab');
+
+                // Remove active class from all buttons and contents
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+
+                // Add active class to clicked button and corresponding content
+                button.classList.add('active');
+                document.getElementById(tabName).classList.add('active');
+
+                // Load suggested posts when suggested tab is clicked
+                if (tabName === 'suggested' && !suggestedPostsLoaded) {
+                    loadSuggestedPosts();
+                    suggestedPostsLoaded = true;
+                }
+            });
+        });
+
+        // Load suggested posts
+        function loadSuggestedPosts() {
+            const container = document.getElementById('suggested-posts-container');
+            
+            fetch('/suggested-posts')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.posts && data.posts.length > 0) {
+                        let html = '';
+                        data.posts.forEach(post => {
+                            html += `
+                                <div class="post-card">
+                                    <div class="post-content-wrapper" onclick="window.location.href='/post/${post.id}'">
+                                        <h3>${post.title}</h3>
+                                        <p class="post-content">${post.content.substring(0, 150)}...</p>
+                                        <div class="post-meta">
+                                            <span class="category">${post.category}</span>
+                                            <span class="writer">By: ${post.writer_name}</span>
+                                        </div>
+                                    </div>
+                                    <div class="post-footer">
+                                        <button class="like-btn" data-post-id="${post.id}">
+                                            <i class="far fa-heart"></i>
+                                            <span class="like-count">0</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        container.innerHTML = html;
+                        initializeLikeButtons();
+                    } else {
+                        container.innerHTML = '<div class="no-posts-message"><p>No suggested posts found. Start liking posts to get recommendations!</p></div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading suggested posts:', error);
+                    container.innerHTML = '<div class="no-posts-message"><p>Error loading suggested posts. Please try again.</p></div>';
+                });
+        }
+
+        // Like functionality
+        function initializeLikeButtons() {
+            document.querySelectorAll('.like-btn').forEach(button => {
+                // Remove previous event listeners
+                const newButton = button.cloneNode(true);
+                button.parentNode.replaceChild(newButton, button);
+
+                const postId = newButton.getAttribute('data-post-id');
+                
+                // Load initial like count and state
+                loadLikeState(postId, newButton);
+
+                // Add click handler
+                newButton.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent card click event
+                    toggleLike(postId, newButton);
+                });
+            });
+        }
+
+        // Initialize like buttons on page load
+        initializeLikeButtons();
+
+        function loadLikeState(postId, button) {
+            fetch(`/post-likes/${postId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const icon = button.querySelector('i');
+                    const count = button.querySelector('.like-count');
+                    
+                    count.textContent = data.like_count;
+                    
+                    if (data.user_liked) {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                        button.classList.add('liked');
+                    } else {
+                        icon.classList.add('far');
+                        icon.classList.remove('fas');
+                        button.classList.remove('liked');
+                    }
+                })
+                .catch(error => console.error('Error loading like state:', error));
+        }
+
+        function toggleLike(postId, button) {
+            fetch(`/like/${postId}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    const icon = button.querySelector('i');
+                    const count = button.querySelector('.like-count');
+                    
+                    count.textContent = data.like_count;
+                    
+                    if (data.liked) {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                        button.classList.add('liked');
+                    } else {
+                        icon.classList.add('far');
+                        icon.classList.remove('fas');
+                        button.classList.remove('liked');
+                    }
+                })
+                .catch(error => console.error('Error toggling like:', error));
+        }
     </script>
 
 </body>

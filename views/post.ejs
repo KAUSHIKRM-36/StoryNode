@@ -38,7 +38,74 @@
                 <span class="category"><%= post.category %></span>
                 <span class="writer">By: <%= post.writer_name %></span>
             </div>
+            <!-- Like Button -->
+            <div class="post-likes-section">
+                <button class="like-btn" data-post-id="<%= post.id %>">
+                    <i class="far fa-heart"></i>
+                    <span class="like-count">0</span>
+                    <span class="like-text">Like</span>
+                </button>
+            </div>
         </div>
     </div>
+
+    <script>
+        // Like functionality for individual post page
+        const likeBtn = document.querySelector('.like-btn');
+        const postId = likeBtn.getAttribute('data-post-id');
+        
+        // Load initial like count and state
+        loadLikeState(postId, likeBtn);
+
+        // Add click handler
+        likeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleLike(postId, likeBtn);
+        });
+
+        function loadLikeState(postId, button) {
+            fetch(`/post-likes/${postId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const icon = button.querySelector('i');
+                    const count = button.querySelector('.like-count');
+                    
+                    count.textContent = data.like_count;
+                    
+                    if (data.user_liked) {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                        button.classList.add('liked');
+                    } else {
+                        icon.classList.add('far');
+                        icon.classList.remove('fas');
+                        button.classList.remove('liked');
+                    }
+                })
+                .catch(error => console.error('Error loading like state:', error));
+        }
+
+        function toggleLike(postId, button) {
+            fetch(`/like/${postId}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    const icon = button.querySelector('i');
+                    const count = button.querySelector('.like-count');
+                    
+                    count.textContent = data.like_count;
+                    
+                    if (data.liked) {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                        button.classList.add('liked');
+                    } else {
+                        icon.classList.add('far');
+                        icon.classList.remove('fas');
+                        button.classList.remove('liked');
+                    }
+                })
+                .catch(error => console.error('Error toggling like:', error));
+        }
+    </script>
 </body>
 </html>

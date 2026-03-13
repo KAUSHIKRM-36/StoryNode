@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
-const port = 3000;
+const port = 3001;
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -27,13 +27,18 @@ const db = mysql.createConnection({
     database: process.env.DATABASE
 });
 
-db.connect((err) => {
+function connectWithRetry() {
+  db.connect((err) => {
     if (err) {
-        console.error('Error connecting to MySQL database:', err);
-        process.exit(1); // Exit the process if the database connection fails
+      console.log("MySQL not ready, retrying in 5 seconds...");
+      setTimeout(connectWithRetry, 5000);
+    } else {
+      console.log("Connected to MySQL!");
     }
-    console.log('Connected to MySQL database!');
-});
+  });
+}
+
+connectWithRetry();
 
 // Set up EJS as the view engine
 app.set('view engine', 'ejs');
@@ -63,11 +68,26 @@ app.get('/register', (req, res) => {
 
 app.post('/register', (req, res) => {
     const { username, password } = req.body;
-    const hashedPassword = bcrypt.hashSync(password, 10);
-    const query = 'INSERT INTO users (username, password) VALUES (?, ?)';
-    db.query(query, [username, hashedPassword], (err) => {
+    
+    // First check if username exists
+    const checkQuery = 'SELECT * FROM users WHERE username = ?';
+    db.query(checkQuery, [username], (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        res.redirect('/login');
+        
+        if (results.length > 0) {
+            // Username already exists
+            return res.render('register', { 
+                error: 'Username already exists. Please choose a different one.' 
+            });
+        }
+        
+        // Proceed with registration
+        const hashedPassword = bcrypt.hashSync(password, 10);
+        const insertQuery = 'INSERT INTO users (username, password) VALUES (?, ?)';
+        db.query(insertQuery, [username, hashedPassword], (err) => {
+            if (err) return handleDatabaseError(err, res);
+            res.redirect('/login');
+        });
     });
 });
 
@@ -258,6 +278,37 @@ app.get('/explore-posts', (req, res) => {
     });
 });
 
+// Suggested Posts Route - Get posts based on liked categories
+app.get('/suggested-posts', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const userId = req.session.userId;
+
+    // Query to get posts in categories that the user has liked
+    const query = `
+        SELECT DISTINCT p.* FROM posts p
+        WHERE p.category IN (
+            SELECT DISTINCT p2.category FROM posts p2
+            INNER JOIN likes l ON l.post_id = p2.id
+            WHERE l.user_id = ?
+        )
+        AND p.id NOT IN (
+            SELECT post_id FROM likes WHERE user_id = ?
+        )
+        ORDER BY p.id DESC
+    `;
+
+    db.query(query, [userId, userId], (err, results) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json({ posts: results });
+    });
+});
+
 // Add a Comment
 app.post('/comments', (req, res) => {
     const { postId, comment } = req.body;
@@ -335,6 +386,98 @@ app.delete('/delete-account', (req, res) => {
             }
             res.status(200).json({ message: 'Account deleted successfully' });
         });
+    });
+});
+
+// Get like count and check if user liked the post
+app.get('/post-likes/:postId', (req, res) => {
+    const postId = req.params.postId;
+    const userId = req.session.userId;
+
+    // Get total like count
+    const countQuery = 'SELECT COUNT(*) as like_count FROM likes WHERE post_id = ?';
+    db.query(countQuery, [postId], (err, results) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        const likeCount = results[0].like_count;
+
+        // Check if current user liked this post
+        if (!userId) {
+            return res.json({ like_count: likeCount, user_liked: false });
+        }
+
+        const userLikeQuery = 'SELECT * FROM likes WHERE post_id = ? AND user_id = ?';
+        db.query(userLikeQuery, [postId, userId], (err, results) => {
+            if (err) {
+                console.error('Database error:', err);
+                return res.status(500).json({ error: 'Database error' });
+            }
+
+            const userLiked = results.length > 0;
+            res.json({ like_count: likeCount, user_liked: userLiked });
+        });
+    });
+});
+
+// Toggle like on a post
+app.post('/like/:postId', (req, res) => {
+    const postId = req.params.postId;
+    const userId = req.session.userId;
+
+    if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Check if user already liked this post
+    const checkQuery = 'SELECT * FROM likes WHERE post_id = ? AND user_id = ?';
+    db.query(checkQuery, [postId, userId], (err, results) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+
+        if (results.length > 0) {
+            // User already liked, so remove the like (unlike)
+            const deleteQuery = 'DELETE FROM likes WHERE post_id = ? AND user_id = ?';
+            db.query(deleteQuery, [postId, userId], (err) => {
+                if (err) {
+                    console.error('Database error:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                // Get updated like count
+                const countQuery = 'SELECT COUNT(*) as like_count FROM likes WHERE post_id = ?';
+                db.query(countQuery, [postId], (err, results) => {
+                    if (err) {
+                        console.error('Database error:', err);
+                        return res.status(500).json({ error: 'Database error' });
+                    }
+                    res.json({ liked: false, like_count: results[0].like_count });
+                });
+            });
+        } else {
+            // User hasn't liked yet, so add the like
+            const insertQuery = 'INSERT INTO likes (post_id, user_id) VALUES (?, ?)';
+            db.query(insertQuery, [postId, userId], (err) => {
+                if (err) {
+                    console.error('Database error:', err);
+                    return res.status(500).json({ error: 'Database error' });
+                }
+
+                // Get updated like count
+                const countQuery = 'SELECT COUNT(*) as like_count FROM likes WHERE post_id = ?';
+                db.query(countQuery, [postId], (err, results) => {
+                    if (err) {
+                        console.error('Database error:', err);
+                        return res.status(500).json({ error: 'Database error' });
+                    }
+                    res.json({ liked: true, like_count: results[0].like_count });
+                });
+            });
+        }
     });
 });
 

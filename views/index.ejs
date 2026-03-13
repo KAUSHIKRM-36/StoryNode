@@ -3,110 +3,444 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
-    <link rel="stylesheet" href="/css/style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>StoryNode - Blogging Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f5f1ed;
+            color: #1a1a1a;
+            overflow-x: hidden;
+            line-height: 1.4;
+        }
+
+        /* Video Background */
+        #bg-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -2;
+            opacity: 0.4;
+        }
+
+        .video-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(245, 241, 237, 0.92);
+            z-index: -1;
+        }
+
+        /* Navigation */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 32px 60px;
+            position: relative;
+            z-index: 100;
+            border-bottom: 1px solid rgba(0, 89, 179, 0.1);
+            animation: slideDown 0.8s ease-out;
+        }
+
+        .navbar-brand {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-decoration: none;
+            color: #1a1a1a;
+            text-transform: uppercase;
+            transition: opacity 0.3s ease;
+        }
+
+        .navbar-brand:hover {
+            opacity: 0.6;
+        }
+
+        /* Hero Section - Single Column Full Width */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 60px 60px 100px 60px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .hero-left {
+            animation: slideInLeft 1s ease-out;
+            width: 100%;
+        }
+
+        /* Label */
+        .hero-label {
+            font-size: 12px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #0059b3;
+            margin-bottom: 20px;
+            font-weight: 700;
+            display: block;
+        }
+
+        /* Main Title - Massive and Bold */
+        .hero-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 180px;
+            font-weight: 900;
+            line-height: 0.85;
+            margin-bottom: 40px;
+            color: #1a1a1a;
+            letter-spacing: -4px;
+            word-spacing: 9999px;
+            max-width: 100%;
+            text-transform: uppercase;
+        }
+
+        /* Description - Larger and More Prominent */
+        .hero-description {
+            font-size: 24px;
+            line-height: 1.5;
+            color: #2a2a2a;
+            margin-bottom: 50px;
+            max-width: 85%;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+
+        /* CTA Buttons */
+        .cta-buttons {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            margin-bottom: 80px;
+        }
+
+        .cta-button {
+            padding: 18px 50px;
+            border: 2.5px solid #0059b3;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            background: transparent;
+            color: #0059b3;
+            border-radius: 2px;
+        }
+
+        .cta-button.primary {
+            background: #0059b3;
+            color: #f5f1ed;
+        }
+
+        .cta-button:hover {
+            background: #0059b3;
+            color: #f5f1ed;
+            border-color: #0059b3;
+            transform: translateY(-3px);
+            box-shadow: 0 12px 32px rgba(0, 89, 179, 0.25);
+        }
+
+        .cta-button.primary:hover {
+            background: #004080;
+            border-color: #004080;
+        }
+
+        /* Info Grid - Full Width Three Column */
+        .info-section {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 60px;
+            padding-top: 60px;
+            border-top: 2px solid rgba(0, 89, 179, 0.15);
+            margin-top: 40px;
+        }
+
+        .info-item {
+            animation: fadeInUp 1s ease-out;
+        }
+
+        .info-item h4 {
+            font-size: 13px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #0059b3;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+        .info-item p {
+            font-size: 16px;
+            line-height: 1.7;
+            color: #3a3a3a;
+            font-weight: 400;
+        }
+
+        /* Decorative Elements */
+        .decorative-text {
+            position: fixed;
+            font-family: 'Playfair Display', serif;
+            font-size: 300px;
+            font-weight: 900;
+            color: rgba(0, 89, 179, 0.02);
+            pointer-events: none;
+            z-index: 1;
+            line-height: 0.8;
+            letter-spacing: -8px;
+        }
+
+        .decorative-text.top-right {
+            top: -80px;
+            right: -120px;
+        }
+
+        /* Animations */
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            .hero-title {
+                font-size: 120px;
+            }
+
+            .hero-description {
+                font-size: 20px;
+                max-width: 90%;
+            }
+
+            .info-section {
+                gap: 40px;
+            }
+
+            .decorative-text {
+                font-size: 200px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .hero {
+                padding: 50px 50px 80px 50px;
+            }
+
+            .hero-title {
+                font-size: 100px;
+                margin-bottom: 30px;
+            }
+
+            .hero-description {
+                font-size: 18px;
+                margin-bottom: 40px;
+            }
+
+            .info-section {
+                grid-template-columns: 1fr 1fr;
+                gap: 40px;
+                margin-top: 40px;
+            }
+
+            .info-item:nth-child(3) {
+                grid-column: 1 / -1;
+                max-width: 50%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 24px 30px;
+            }
+
+            .hero {
+                padding: 40px 30px 60px 30px;
+                min-height: auto;
+            }
+
+            .hero-title {
+                font-size: 72px;
+                margin-bottom: 24px;
+                letter-spacing: -2px;
+            }
+
+            .hero-description {
+                font-size: 16px;
+                max-width: 100%;
+                margin-bottom: 32px;
+            }
+
+            .cta-buttons {
+                gap: 16px;
+                margin-bottom: 60px;
+            }
+
+            .cta-button {
+                padding: 16px 40px;
+                font-size: 12px;
+            }
+
+            .info-section {
+                grid-template-columns: 1fr;
+                gap: 40px;
+                padding-top: 40px;
+                margin-top: 0;
+            }
+
+            .info-item:nth-child(3) {
+                grid-column: 1;
+                max-width: 100%;
+            }
+
+            .decorative-text {
+                font-size: 120px;
+                right: -60px;
+                top: 0;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .navbar {
+                padding: 20px 20px;
+            }
+
+            .navbar-brand {
+                font-size: 12px;
+            }
+
+            .hero {
+                padding: 30px 20px 50px 20px;
+            }
+
+            .hero-label {
+                font-size: 11px;
+            }
+
+            .hero-title {
+                font-size: 54px;
+                margin-bottom: 20px;
+            }
+
+            .hero-description {
+                font-size: 14px;
+                line-height: 1.6;
+                margin-bottom: 24px;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+                margin-bottom: 40px;
+            }
+
+            .cta-button {
+                width: 100%;
+                text-align: center;
+                padding: 16px 30px;
+            }
+
+            .info-section {
+                gap: 32px;
+                padding-top: 32px;
+            }
+
+            .info-item h4 {
+                font-size: 12px;
+                margin-bottom: 12px;
+            }
+
+            .info-item p {
+                font-size: 14px;
+            }
+
+            .decorative-text {
+                font-size: 80px;
+                right: -40px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <!-- Navbar -->
+    <!-- Decorative Text -->
+    <div class="decorative-text top-right">StoryNode</div>
+
+    <!-- Navigation -->
     <nav class="navbar">
-        <a href="#" class="navbar-brand">Blogging Platform</a>
+        <span class="navbar-brand">Blogging Guidelines</span>
     </nav>
 
-    <div class="index-title">
-        <h3 style="color:#007bff">Welcome To The BLOGGING Platform</h3>
-    </div>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-left">
+            <label class="hero-label">Share Your Stories</label>
+            <h1 class="hero-title">StoryNode</h1>
+            <p class="hero-description">
+                Join our growing community of writers and thinkers. Express yourself, connect with like-minded individuals, and build your unique voice in our platform.
+            </p>
+            <div class="cta-buttons">
+                <a href="/register" class="cta-button primary">Register</a>
+                <a href="/login" class="cta-button">Login</a>
+            </div>
 
-    <div class="animation-overlay">
-        <h3>Share Your Stories With The World</h3>
-        <p>Join our growing community of writers and thinkers</p>
-        <div class="cta-buttons">
-            <a href="/register" class="cta-button">Register</a>
-            <a href="/login" class="cta-button">Login</a>
+            <!-- Info Grid -->
+            <div class="info-section">
+                <div class="info-item">
+                    <h4>Community Driven</h4>
+                    <p>Connect with creators worldwide and grow your audience</p>
+                </div>
+                <div class="info-item">
+                    <h4>Quality First</h4>
+                    <p>Curated content from authentic voices and perspectives</p>
+                </div>
+                <div class="info-item">
+                    <h4>Always Free</h4>
+                    <p>Start publishing your stories without any barriers</p>
+                </div>
+            </div>
         </div>
-    </div>
-
-    <!-- Fullscreen 3D Animation Container -->
-    <div id="threejs-container"></div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // Scene setup
-            const container = document.getElementById('threejs-container');
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            container.appendChild(renderer.domElement);
-
-            const spheres = [];
-            const sphereCount = 50; // Number of spheres to create
-
-            // Function to create a random color
-            function getRandomColor() {
-                return new THREE.Color(Math.random(), Math.random(), Math.random());
-            }
-
-            // Create spheres with random colors and velocities
-            for (let i = 0; i < sphereCount; i++) {
-                const sphereGeometry = new THREE.SphereGeometry(0.2, 32, 32);
-                const sphereMaterial = new THREE.MeshBasicMaterial({ color: getRandomColor() });
-                const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-                
-                // Random starting position
-                sphere.position.set(
-                    Math.random() * 10 - 5, // X position between -5 and 5
-                    Math.random() * 10 - 5, // Y position between -5 and 5
-                    Math.random() * 10 - 5  // Z position between -5 and 5
-                );
-                
-                // Random velocity
-                sphere.velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 0.03, // Random velocity on X
-                    (Math.random() - 0.5) * 0.03, // Random velocity on Y
-                    (Math.random() - 0.5) * 0.03  // Random velocity on Z
-                );
-
-                scene.add(sphere);
-                spheres.push(sphere);
-            }
-
-            // Camera position
-            camera.position.z = 5;
-
-            // Animation loop
-            function animate() {
-                requestAnimationFrame(animate);
-
-                // Update the positions of all spheres
-                spheres.forEach(sphere => {
-                    sphere.position.add(sphere.velocity);
-
-                    // Check for collisions with the viewport bounds
-                    if (sphere.position.x > 5 || sphere.position.x < -5) {
-                        sphere.velocity.x = -sphere.velocity.x; // Reverse direction on X axis
-                    }
-                    if (sphere.position.y > 5 || sphere.position.y < -5) {
-                        sphere.velocity.y = -sphere.velocity.y; // Reverse direction on Y axis
-                    }
-                    if (sphere.position.z > 5 || sphere.position.z < -5) {
-                        sphere.velocity.z = -sphere.velocity.z; // Reverse direction on Z axis
-                    }
-                });
-
-                renderer.render(scene, camera);
-            }
-
-            // Handle window resize
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
-            animate();
-        });
-    </script>
+    </section>
 </body>
 </html>
