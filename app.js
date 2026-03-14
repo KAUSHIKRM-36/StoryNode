@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3001;
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -20,28 +20,20 @@ app.use(session({
 }));
 
 // Database connection
-// Database connection
 const db = mysql.createConnection({
-    host: process.env.MYSQL_HOST || 'localhost',
-    user: process.env.MYSQL_USER || 'root',
-    password: process.env.MYSQL_PASSWORD || 'password',
-    database: process.env.MYSQL_DATABASE || 'blogging_platform',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelayMs: 0
+    host: process.env.HOSTNAME,
+    user: process.env.ROOT,
+    password: process.env.PASSWORD, // Replace with your MySQL password
+    database: process.env.DATABASE
 });
 
-function connectWithRetry(attempt = 1) {
+function connectWithRetry() {
   db.connect((err) => {
     if (err) {
-      console.log(`[Attempt ${attempt}] MySQL not ready, retrying in 10 seconds...`);
-      console.log(`Trying to connect to: ${process.env.MYSQL_HOST}`);
-      console.log(`Database: ${process.env.MYSQL_DATABASE}`);
-      setTimeout(() => connectWithRetry(attempt + 1), 10000);
+      console.log("MySQL not ready, retrying in 5 seconds...");
+      setTimeout(connectWithRetry, 5000);
     } else {
-      console.log("✓ Connected to MySQL!");
+      console.log("Connected to MySQL!");
     }
   });
 }
