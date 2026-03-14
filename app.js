@@ -20,20 +20,28 @@ app.use(session({
 }));
 
 // Database connection
+// Database connection
 const db = mysql.createConnection({
     host: process.env.MYSQL_HOST || 'localhost',
     user: process.env.MYSQL_USER || 'root',
     password: process.env.MYSQL_PASSWORD || 'password',
-    database: process.env.MYSQL_DATABASE || 'blogging_platform'
+    database: process.env.MYSQL_DATABASE || 'blogging_platform',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    enableKeepAlive: true,
+    keepAliveInitialDelayMs: 0
 });
 
-function connectWithRetry() {
+function connectWithRetry(attempt = 1) {
   db.connect((err) => {
     if (err) {
-      console.log("MySQL not ready, retrying in 5 seconds...");
-      setTimeout(connectWithRetry, 5000);
+      console.log(`[Attempt ${attempt}] MySQL not ready, retrying in 10 seconds...`);
+      console.log(`Trying to connect to: ${process.env.MYSQL_HOST}`);
+      console.log(`Database: ${process.env.MYSQL_DATABASE}`);
+      setTimeout(() => connectWithRetry(attempt + 1), 10000);
     } else {
-      console.log("Connected to MySQL!");
+      console.log("✓ Connected to MySQL!");
     }
   });
 }
