@@ -1,0 +1,29 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to Railway
+        uses: railwayapp/railway-action@v1
+        with:
+          token: ${{ secrets.RAILWAY_TOKEN }}
+          service: ${{ secrets.RAILWAY_SERVICE }}
+          environment: production
+
+      - name: Notify deployment
+        if: success()
+        run: echo "✅ Deployment to Railway successful!"
+
+      - name: Notify failure
+        if: failure()
+        run: echo "❌ Deployment to Railway failed!"
