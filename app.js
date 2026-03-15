@@ -21,10 +21,10 @@ app.use(session({
 
 // Database connection
 const db = mysql.createConnection({
-    host: process.env.HOSTNAME,
-    user: process.env.ROOT,
-    password: process.env.PASSWORD, // Replace with your MySQL password
-    database: process.env.DATABASE
+    host: process.env.MYSQL_HOST || process.env.HOSTNAME,
+    user: process.env.MYSQL_USER || process.env.ROOT,
+    password: process.env.MYSQL_PASSWORD || process.env.PASSWORD,
+    database: process.env.MYSQL_DATABASE || process.env.DATABASE
 });
 
 function connectWithRetry() {
