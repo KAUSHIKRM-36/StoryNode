@@ -24,22 +24,33 @@ const db = mysql.createConnection({
     host: process.env.MYSQL_HOST,
     user: process.env.MYSQL_USER,
     password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DATABASE
+    database: process.env.MYSQL_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-function connectWithRetry() {
-  db.connect((err) => {
+db.connect((err) => {
     if (err) {
-      console.log("MySQL not ready, retrying in 5 seconds...");
-      setTimeout(connectWithRetry, 5000);
+        console.error('Initial connection failed:', err);
+        setTimeout(() => db.connect(), 5000);
     } else {
-      console.log("Connected to MySQL!");
+        console.log('Connected to MySQL!');
     }
-  });
-}
+});
 
-connectWithRetry();
-
+db.on('error', (err) => {
+    console.error('Database error:', err);
+    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+        db.connect();
+    }
+    if (err.code === 'ER_CON_COUNT_ERROR') {
+        setTimeout(() => db.connect(), 5000);
+    }
+    if (err.code === 'ER_AUTH_PLUGIN_CANNOT_LOAD') {
+        setTimeout(() => db.connect(), 5000);
+    }
+});
 // Set up EJS as the view engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
