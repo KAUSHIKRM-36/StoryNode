@@ -20,6 +20,14 @@ app.use(session({
 }));
 
 // Database connection
+console.log('MySQL Config:', {
+    host: process.env.MYSQL_HOST,
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD ? '***' : 'undefined',
+    database: process.env.MYSQL_DATABASE,
+    port: process.env.MYSQL_PORT
+});
+
 const db = mysql.createConnection({
     host: process.env.MYSQL_HOST,
     user: process.env.MYSQL_USER,
