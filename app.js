@@ -12,40 +12,62 @@ const { RedisStore } = require('connect-redis');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Check if Redis URL exists
+if (!process.env.REDIS_URL) {
+  console.error("REDIS_URL is missing in environment variables");
+  process.exit(1);
+}
+
 // Redis client
 const redisClient = createClient({
   url: process.env.REDIS_URL
 });
 
-redisClient.on("error", (err) => console.log("Redis error:", err));
+redisClient.on("connect", () => {
+  console.log("Connected to Redis");
+});
+
+redisClient.on("error", (err) => {
+  console.error("Redis error:", err);
+});
 
 async function startServer() {
-  await redisClient.connect();
+  try {
+    // connect to Redis
+    await redisClient.connect();
 
-  const redisStore = new RedisStore({
-    client: redisClient,
-    prefix: "sess:"
-  });
+    const redisStore = new RedisStore({
+      client: redisClient,
+      prefix: "sess:"
+    });
 
-  app.use(bodyParser.urlencoded({ extended: true }));
-  app.use(express.static(path.join(__dirname, 'public')));
+    // Middleware
+    app.use(bodyParser.urlencoded({ extended: true }));
+    app.use(express.static(path.join(__dirname, 'public')));
 
-  app.use(
-    session({
-      store: redisStore,
-      secret: process.env.SESSION_SECRET || "dev-secret",
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        secure: false,
-        maxAge: 1000 * 60 * 60 * 24
-      }
-    })
-  );
+    // Session middleware
+    app.use(
+      session({
+        store: redisStore,
+        secret: process.env.SESSION_SECRET || "dev-secret",
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          secure: false,
+          maxAge: 1000 * 60 * 60 * 24
+        }
+      })
+    );
 
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  }
 }
 
 startServer();
