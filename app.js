@@ -4,16 +4,16 @@ const session = require('express-session');
 const mysql = require('mysql2');
 const path = require('path');
 const { createClient } = require('redis');
-const RedisStore = require('connect-redis');
+const { RedisStore } = require('connect-redis');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Create Redis client
+// Redis client
 const redisClient = createClient({
-    url: process.env.REDIS_URL
+  url: process.env.REDIS_URL
 });
 
 redisClient.connect().catch(console.error);
@@ -22,23 +22,23 @@ redisClient.connect().catch(console.error);
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize Redis session store
+// Create Redis store
 const redisStore = new RedisStore({
-    client: redisClient
+  client: redisClient
 });
 
-// Session configuration using Redis
+// Session middleware
 app.use(
-    session({
-        store: redisStore,
-        secret: process.env.SESSION_SECRET || "dev-storynode_super_secret_key_123",
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            secure: false, // set to true if HTTPS
-            maxAge: 1000 * 60 * 60 * 24 // 1 day
-        }
-    })
+  session({
+    store: redisStore,
+    secret: process.env.SESSION_SECRET || "dev-storynode_super_secret_key_123",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false,
+      maxAge: 1000 * 60 * 60 * 24
+    }
+  })
 );
 
 // Parse MYSQL_URL
