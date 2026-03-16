@@ -3,13 +3,13 @@ const bodyParser = require('body-parser');
 const session = require('express-session');
 const mysql = require('mysql2');
 const path = require('path');
-const { createClient } = require("redis");
-const RedisStore = require("connect-redis").default;
+const { createClient } = require('redis');
+const RedisStore = require('connect-redis');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Create Redis client
 const redisClient = createClient({
@@ -20,17 +20,22 @@ redisClient.connect().catch(console.error);
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Initialize Redis session store
+const redisStore = new RedisStore({
+    client: redisClient
+});
 
 // Session configuration using Redis
 app.use(
     session({
-        store: new RedisStore({ client: redisClient }),
+        store: redisStore,
         secret: process.env.SESSION_SECRET || "dev-storynode_super_secret_key_123",
         resave: false,
         saveUninitialized: false,
         cookie: {
-            secure: false, // set true if HTTPS
+            secure: false, // set to true if HTTPS
             maxAge: 1000 * 60 * 60 * 24 // 1 day
         }
     })
