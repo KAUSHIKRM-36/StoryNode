@@ -89,6 +89,10 @@ const handleDatabaseError = (err, res) => {
 
 // Routes
 
+app.get("/", (req, res) => {
+  res.send("Server is working");
+});
+
 // Home Page (index.ejs)
 app.get('/', (req, res) => {
     const query = 'SELECT * FROM posts ORDER BY id DESC LIMIT 3'; // Fetch latest 3 posts
