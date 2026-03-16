@@ -8,6 +8,10 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ========== ENVIRONMENT DETECTION ==========
+const isProduction = process.env.NODE_ENV === 'production';
+console.log('🌍 Environment:', isProduction ? 'PRODUCTION' : 'DEVELOPMENT');
+
 // ========== DATABASE CONFIGURATION ==========
 const MYSQL_URL = process.env.MYSQL_URL;
 let dbConfig = {};
@@ -61,27 +65,32 @@ db.getConnection((err, connection) => {
 });
 
 // ========== MIDDLEWARE - ORDER IS CRITICAL ==========
-// 1. Body parsing FIRST
+// 1. Trust proxy FIRST (for Railway and other reverse proxies)
+if (isProduction) {
+    app.set('trust proxy', 1);
+}
+
+// 2. Body parsing
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
-// 2. Static files
+// 3. Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 3. Session middleware BEFORE routes
+// 4. Session middleware - Works on both HTTP and HTTPS
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction,  // ✅ HTTPS only in production, HTTP in development
         httpOnly: true,
-        sameSite: 'strict',
+        sameSite: 'lax',  // ✅ Works with redirects
         maxAge: 24 * 60 * 60 * 1000
     }
 }));
 
-// 4. View engine
+// 5. View engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -200,7 +209,6 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res) => {
     console.log('\n===== LOGIN POST ROUTE CALLED =====');
-    console.log('Session before:', req.session);
     console.log('Body received:', req.body);
 
     const { username, password } = req.body;
@@ -244,7 +252,6 @@ app.post('/login', (req, res) => {
             req.session.username = user.username;
             
             console.log('Session set to:', { userId: user.id, username: user.username });
-            console.log('Session ID:', req.sessionID);
             
             req.session.save((err) => {
                 if (err) {
@@ -270,8 +277,7 @@ app.post('/login', (req, res) => {
 
 app.get('/dashboard', isAuthenticated, (req, res) => {
     console.log('\n===== DASHBOARD GET ROUTE CALLED =====');
-    console.log('Session:', req.session);
-    console.log('Session ID:', req.session.userId);
+    console.log('Session User ID:', req.session.userId);
     console.log('Session Username:', req.session.username);
 
     const userId = req.session.userId;
@@ -573,5 +579,5 @@ app.use((req, res) => {
 // ========== START SERVER ==========
 app.listen(PORT, () => {
     console.log(`\n✅ Server running on port ${PORT}`);
-    console.log(`🌐 http://localhost:${PORT}\n`);
+    console.log(`🌐 Environment: ${isProduction ? 'PRODUCTION (Railway)' : 'DEVELOPMENT (Local)'}\n`);
 });
