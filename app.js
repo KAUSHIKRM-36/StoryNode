@@ -10,7 +10,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Create MySQL connection pool
+// Create MySQL connection pool (used for sessions)
 const db = mysql.createPool(process.env.MYSQL_URL);
 
 // Create MySQL session store
@@ -51,27 +51,29 @@ function parseConnectionString(url) {
 }
 
 const connectionConfig = parseConnectionString(process.env.MYSQL_URL);
-const db = mysql.createConnection(connectionConfig);
 
-db.connect((err) => {
+// Separate connection for manual queries
+const dbConnection = mysql.createConnection(connectionConfig);
+
+dbConnection.connect((err) => {
     if (err) {
         console.error('Initial connection failed:', err);
-        setTimeout(() => db.connect(), 5000);
+        setTimeout(() => dbConnection.connect(), 5000);
     } else {
         console.log('Connected to MySQL!');
     }
 });
 
-db.on('error', (err) => {
+dbConnection.on('error', (err) => {
     console.error('Database error:', err);
     if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-        db.connect();
+        dbConnection.connect();
     }
     if (err.code === 'ER_CON_COUNT_ERROR') {
-        setTimeout(() => db.connect(), 5000);
+        setTimeout(() => dbConnection.connect(), 5000);
     }
     if (err.code === 'ER_AUTH_PLUGIN_CANNOT_LOAD') {
-        setTimeout(() => db.connect(), 5000);
+        setTimeout(() => dbConnection.connect(), 5000);
     }
 });
 
