@@ -1,5 +1,4 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const session = require('express-session');
 const mysql = require('mysql2');
 const path = require('path');
@@ -47,17 +46,16 @@ console.log('MySQL Config:', {
     host: dbConfig.host,
     user: dbConfig.user,
     database: dbConfig.database,
-    port: dbConfig.port,
-    password: '***'
+    port: dbConfig.port
 });
 
-// ✅ Use createPool instead of createConnection
+// ✅ Use createPool for better connection management
 const db = mysql.createPool(dbConfig);
 
-// Test database connection
+// Test connection
 db.getConnection((err, connection) => {
     if (err) {
-        console.error('Database connection failed:', err);
+        console.error('❌ Database connection failed:', err);
     } else {
         console.log('✅ Connected to MySQL!');
         connection.release();
@@ -65,9 +63,12 @@ db.getConnection((err, connection) => {
 });
 
 // ========== MIDDLEWARE ==========
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+// IMPORTANT: Body parser MUST come before routes
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Session middleware
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
     resave: false,
@@ -75,18 +76,27 @@ app.use(session({
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        sameSite: 'strict'
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
 
-// Set up EJS as the view engine
+// Set up EJS view engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Helper function to handle database query errors
+// ========== HELPER FUNCTIONS ==========
 const handleDatabaseError = (err, res) => {
     console.error('Database error:', err);
     res.status(500).send('Internal Server Error');
+};
+
+// Middleware to check authentication
+const isAuthenticated = (req, res, next) => {
+    if (!req.session.userId) {
+        return res.redirect('/login');
+    }
+    next();
 };
 
 // ========== ROUTES ==========
@@ -95,72 +105,89 @@ const handleDatabaseError = (err, res) => {
 app.get('/', (req, res) => {
     const query = 'SELECT * FROM posts ORDER BY id DESC LIMIT 3';
     db.query(query, (err, results) => {
-        if (err) return handleDatabaseError(err, res);
+        if (err) {
+            console.error('Home page query error:', err);
+            return res.render('index', { posts: [] });
+        }
         res.render('index', { posts: results || [] });
     });
 });
 
-// User Registration - GET
+// ========== REGISTRATION ROUTES ==========
+
+// Register GET
 app.get('/register', (req, res) => {
     res.render('register', { error: null });
 });
 
-// User Registration - POST
+// Register POST
 app.post('/register', (req, res) => {
-    const { username, password } = req.body;
-    
-    // Validate input
-    if (!username || !password) {
+    console.log('\n===== REGISTRATION ATTEMPT =====');
+    console.log('Body:', req.body);
+
+    const { username, password, confirmPassword } = req.body;
+
+    // Validation
+    if (!username || !password || !confirmPassword) {
+        console.log('❌ Missing required fields');
         return res.render('register', { 
-            error: 'Username and password are required.' 
+            error: 'All fields are required.' 
         });
     }
 
     if (password.length < 6) {
         return res.render('register', { 
-            error: 'Password must be at least 6 characters long.' 
+            error: 'Password must be at least 6 characters.' 
+        });
+    }
+
+    if (password !== confirmPassword) {
+        return res.render('register', { 
+            error: 'Passwords do not match.' 
         });
     }
 
     if (username.length < 3) {
         return res.render('register', { 
-            error: 'Username must be at least 3 characters long.' 
+            error: 'Username must be at least 3 characters.' 
         });
     }
-    
-    // Check if username already exists
+
+    // Check if username exists
     const checkQuery = 'SELECT id FROM users WHERE username = ?';
     db.query(checkQuery, [username], (err, results) => {
         if (err) {
-            console.error('Check username error:', err);
+            console.error('❌ Check username error:', err);
             return res.render('register', { 
                 error: 'Database error. Please try again.' 
             });
         }
-        
+
         if (results.length > 0) {
+            console.log('❌ Username already exists:', username);
             return res.render('register', { 
-                error: 'Username already exists. Please choose a different one.' 
+                error: 'Username already exists. Please choose another.' 
             });
         }
-        
-        // Hash password and insert user
+
+        // Hash password and insert
         try {
             const hashedPassword = bcrypt.hashSync(password, 10);
-            const insertQuery = 'INSERT INTO users (username, password) VALUES (?, ?)';
-            
+            const insertQuery = 'INSERT INTO users (username, password, created_at) VALUES (?, ?, NOW())';
+
             db.query(insertQuery, [username, hashedPassword], (err, results) => {
                 if (err) {
-                    console.error('Insert user error:', err);
+                    console.error('❌ Insert user error:', err);
                     return res.render('register', { 
                         error: 'Failed to create account. Please try again.' 
                     });
                 }
-                console.log('✅ User registered:', username);
+
+                console.log('✅ User registered successfully:', username);
                 res.redirect('/login');
             });
         } catch (hashErr) {
-            console.error('Hash error:', hashErr);
+            console.error('❌ Hash error:', hashErr);
             return res.render('register', { 
                 error: 'An error occurred. Please try again.' 
             });
@@ -168,109 +195,85 @@ app.post('/register', (req, res) => {
     });
 });
 
-// User Login - GET
+// ========== LOGIN ROUTES ==========
+
+// Login GET
 app.get('/login', (req, res) => {
     res.render('login', { error: null });
 });
 
-// User Login - POST
+// Login POST
 app.post('/login', (req, res) => {
     console.log('\n===== LOGIN ATTEMPT =====');
-    console.log('Body received:', req.body);
-    
-    const { username, password } = req.body;
-    
-    console.log('Username:', username);
-    console.log('Password provided:', !!password);
+    console.log('Body:', req.body);
 
+    const { username, password } = req.body;
+
+    // Validation
     if (!username || !password) {
-        console.log('❌ Missing credentials');
+        console.log('❌ Missing username or password');
         return res.render('login', { 
             error: 'Username and password are required.' 
         });
     }
-    
+
     console.log('🔍 Searching for user:', username);
     const query = 'SELECT id, username, password FROM users WHERE username = ?';
-    
+
     db.query(query, [username], (err, results) => {
         if (err) {
-            console.error('❌ DATABASE ERROR:', err);
+            console.error('❌ Query error:', err);
             return res.render('login', { 
-                error: 'Database error: ' + err.message
+                error: 'Database error. Please try again.' 
             });
         }
 
-        console.log('Users found:', results.length);
-        
         if (results.length === 0) {
-            console.log('❌ No user found with username:', username);
+            console.log('❌ User not found:', username);
             return res.render('login', { 
-                error: 'Invalid username or password' 
+                error: 'Invalid username or password.' 
             });
         }
 
         const user = results[0];
-        console.log('✅ User found:', user.username, '(ID:', user.id + ')');
+        console.log('✅ User found:', user.username);
 
-        try {
-            const isPasswordValid = bcrypt.compareSync(password, user.password);
-            console.log('🔑 Password valid:', isPasswordValid);
+        // Compare password
+        const isPasswordValid = bcrypt.compareSync(password, user.password);
+        console.log('🔑 Password valid:', isPasswordValid);
 
-            if (isPasswordValid) {
-                console.log('✅ LOGIN SUCCESSFUL!');
-                req.session.userId = user.id;
-                req.session.username = user.username;
-                req.session.save((err) => {
-                    if (err) {
-                        console.error('❌ Session save error:', err);
-                        return res.render('login', { 
-                            error: 'Session error: ' + err.message
-                        });
-                    }
-                    console.log('✅ Session saved. User ID:', req.session.userId);
-                    console.log('🔄 Redirecting to /dashboard');
-                    res.redirect('/dashboard');
-                });
-            } else {
-                console.log('❌ Password mismatch');
-                res.render('login', { 
-                    error: 'Invalid username or password' 
-                });
-            }
-        } catch (compareErr) {
-            console.error('❌ Bcrypt error:', compareErr);
-            res.render('login', { 
-                error: 'Authentication error' 
+        if (isPasswordValid) {
+            console.log('✅ LOGIN SUCCESSFUL!');
+            req.session.userId = user.id;
+            req.session.username = user.username;
+            console.log('✅ Session data set:', { userId: user.id, username: user.username });
+            return res.redirect('/dashboard');
+        } else {
+            console.log('❌ Password invalid');
+            return res.render('login', { 
+                error: 'Invalid username or password.' 
             });
         }
     });
 });
 
-// Dashboard
-app.get('/dashboard', (req, res) => {
-    console.log('\n===== DASHBOARD ACCESS =====');
-    console.log('Session ID:', req.session.id);
-    console.log('User ID in session:', req.session.userId);
-    console.log('Username in session:', req.session.username);
+// ========== DASHBOARD ROUTES ==========
 
-    if (!req.session.userId) {
-        console.log('❌ No userId in session - redirecting to /login');
-        return res.redirect('/login');
-    }
+// Dashboard GET
+app.get('/dashboard', isAuthenticated, (req, res) => {
+    console.log('\n===== DASHBOARD ACCESS =====');
+    console.log('User ID:', req.session.userId);
+    console.log('Username:', req.session.username);
 
     const userId = req.session.userId;
-    console.log('✅ User authenticated. Loading dashboard for user ID:', userId);
-    
+
     // Get user details
-    const userQuery = 'SELECT username FROM users WHERE id = ?';
+    const userQuery = 'SELECT id, username FROM users WHERE id = ?';
     db.query(userQuery, [userId], (err, userResults) => {
         if (err) {
             console.error('❌ User query error:', err);
             return handleDatabaseError(err, res);
         }
-
-        console.log('User query results:', userResults.length);
 
         if (userResults.length === 0) {
             console.log('❌ User not found in database');
@@ -280,7 +283,7 @@ app.get('/dashboard', (req, res) => {
 
         const username = userResults[0].username;
         console.log('✅ User found:', username);
-        
+
         // Get all posts
         const allPostsQuery = 'SELECT * FROM posts ORDER BY id DESC';
         db.query(allPostsQuery, (err, allPostResults) => {
@@ -290,20 +293,20 @@ app.get('/dashboard', (req, res) => {
             }
 
             console.log('All posts found:', allPostResults.length);
-            
+
             // Get user's posts
-            const postsQuery = 'SELECT * FROM posts WHERE user_id = ? ORDER BY id DESC';
-            db.query(postsQuery, [userId], (err, postResults) => {
+            const userPostsQuery = 'SELECT * FROM posts WHERE user_id = ? ORDER BY id DESC';
+            db.query(userPostsQuery, [userId], (err, userPostResults) => {
                 if (err) {
                     console.error('❌ User posts query error:', err);
                     return handleDatabaseError(err, res);
                 }
 
-                console.log('User posts found:', postResults.length);
+                console.log('User posts found:', userPostResults.length);
                 console.log('✅ Rendering dashboard');
-                
-                res.render('dashboard', { 
-                    posts: postResults || [],
+
+                res.render('dashboard', {
+                    posts: userPostResults || [],
                     allPosts: allPostResults || [],
                     username: username,
                     userId: userId
@@ -313,55 +316,23 @@ app.get('/dashboard', (req, res) => {
     });
 });
 
-// Post Details
-app.get('/post/:id', (req, res) => {
-    const postId = req.params.id;
-    
-    // Get post
-    const query = 'SELECT * FROM posts WHERE id = ?';
-    db.query(query, [postId], (err, results) => {
-        if (err) return handleDatabaseError(err, res);
-        
-        if (results.length === 0) {
-            return res.status(404).send('Post not found');
-        }
+// ========== POST ROUTES ==========
 
-        const post = results[0];
-        
-        // Get comments
-        const commentsQuery = 'SELECT c.*, u.username FROM comments c JOIN users u ON c.user_id = u.id WHERE c.post_id = ? ORDER BY c.id DESC';
-        db.query(commentsQuery, [postId], (err, comments) => {
-            if (err) return handleDatabaseError(err, res);
-            
-            res.render('post', { 
-                post: post, 
-                comments: comments || [],
-                userId: req.session.userId,
-                username: req.session.username
-            });
-        });
-    });
-});
-
-// Create Post - GET
-app.get('/create-post', (req, res) => {
-    if (!req.session.userId) {
-        return res.redirect('/login');
-    }
+// Create Post GET
+app.get('/create-post', isAuthenticated, (req, res) => {
     res.render('create-post');
 });
 
-// Create Post - POST
-app.post('/posts', (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).send('Unauthorized');
-    }
+// Create Post POST
+app.post('/posts', isAuthenticated, (req, res) => {
+    console.log('\n===== CREATE POST =====');
+    console.log('Body:', req.body);
 
     const { title, content, category } = req.body;
     const userId = req.session.userId;
     const writerName = req.session.username;
 
-    // Validate
+    // Validation
     if (!title || !content || !category) {
         return res.status(400).send('Title, content, and category are required.');
     }
@@ -370,30 +341,63 @@ app.post('/posts', (req, res) => {
         INSERT INTO posts (title, content, category, user_id, writer_name, created_at)
         VALUES (?, ?, ?, ?, ?, NOW())
     `;
-    
+
     db.query(query, [title, content, category, userId, writerName], (err, results) => {
         if (err) {
-            console.error('Create post error:', err);
+            console.error('❌ Create post error:', err);
             return res.status(500).send('Internal Server Error');
         }
-        console.log('✅ Post created by:', writerName);
+
+        console.log('✅ Post created:', results.insertId);
         res.redirect('/dashboard');
     });
 });
 
-// Edit Post - GET
-app.get('/edit-post/:id', (req, res) => {
-    if (!req.session.userId) {
-        return res.redirect('/login');
-    }
+// View Post
+app.get('/post/:id', (req, res) => {
+    const postId = req.params.id;
 
+    const query = 'SELECT * FROM posts WHERE id = ?';
+    db.query(query, [postId], (err, results) => {
+        if (err) return handleDatabaseError(err, res);
+
+        if (results.length === 0) {
+            return res.status(404).send('Post not found');
+        }
+
+        const post = results[0];
+
+        // Get comments
+        const commentsQuery = `
+            SELECT c.id, c.comment, c.created_at, u.username 
+            FROM comments c 
+            JOIN users u ON c.user_id = u.id 
+            WHERE c.post_id = ? 
+            ORDER BY c.created_at DESC
+        `;
+
+        db.query(commentsQuery, [postId], (err, comments) => {
+            if (err) return handleDatabaseError(err, res);
+
+            res.render('post', {
+                post: post,
+                comments: comments || [],
+                userId: req.session.userId,
+                username: req.session.username
+            });
+        });
+    });
+});
+
+// Edit Post GET
+app.get('/edit-post/:id', isAuthenticated, (req, res) => {
     const postId = req.params.id;
     const userId = req.session.userId;
 
     const query = 'SELECT * FROM posts WHERE id = ? AND user_id = ?';
     db.query(query, [postId, userId], (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        
+
         if (results.length === 0) {
             return res.status(403).send('You are not authorized to edit this post');
         }
@@ -402,21 +406,17 @@ app.get('/edit-post/:id', (req, res) => {
     });
 });
 
-// Update Post - POST
-app.post('/update-post/:id', (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).send('Unauthorized');
-    }
-
+// Update Post POST
+app.post('/update-post/:id', isAuthenticated, (req, res) => {
     const postId = req.params.id;
     const userId = req.session.userId;
     const { title, content, category } = req.body;
 
-    // Verify ownership
+    // Check ownership
     const checkQuery = 'SELECT user_id FROM posts WHERE id = ?';
     db.query(checkQuery, [postId], (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        
+
         if (results.length === 0 || results[0].user_id !== userId) {
             return res.status(403).send('You are not authorized to update this post');
         }
@@ -431,11 +431,7 @@ app.post('/update-post/:id', (req, res) => {
 });
 
 // Delete Post
-app.get('/delete-post/:id', (req, res) => {
-    if (!req.session.userId) {
-        return res.redirect('/login');
-    }
-
+app.get('/delete-post/:id', isAuthenticated, (req, res) => {
     const postId = req.params.id;
     const userId = req.session.userId;
 
@@ -468,25 +464,10 @@ app.get('/delete-post/:id', (req, res) => {
     });
 });
 
-// Explore Posts
-app.get('/explore-posts', (req, res) => {
-    if (!req.session.userId) {
-        return res.redirect('/login');
-    }
-
-    const query = 'SELECT * FROM posts ORDER BY id DESC';
-    db.query(query, (err, results) => {
-        if (err) return handleDatabaseError(err, res);
-        res.render('explore', { posts: results || [] });
-    });
-});
+// ========== COMMENT ROUTES ==========
 
 // Add Comment
-app.post('/comments', (req, res) => {
-    if (!req.session.userId) {
-        return res.status(401).json({ message: 'Unauthorized' });
-    }
-
+app.post('/comments', isAuthenticated, (req, res) => {
     const { postId, comment } = req.body;
     const userId = req.session.userId;
 
@@ -497,20 +478,30 @@ app.post('/comments', (req, res) => {
     const query = 'INSERT INTO comments (post_id, user_id, comment, created_at) VALUES (?, ?, ?, NOW())';
     db.query(query, [postId, userId, comment], (err, results) => {
         if (err) {
-            console.error('Add comment error:', err);
+            console.error('❌ Add comment error:', err);
             return res.status(500).json({ message: 'Failed to add comment' });
         }
+
         console.log('✅ Comment added');
         res.json({ message: 'Comment added successfully' });
     });
 });
 
-// Search Posts
-app.get('/search', (req, res) => {
-    if (!req.session.userId) {
-        return res.redirect('/login');
-    }
+// ========== EXPLORE ROUTES ==========
 
+// Explore Posts
+app.get('/explore-posts', isAuthenticated, (req, res) => {
+    const query = 'SELECT * FROM posts ORDER BY id DESC';
+    db.query(query, (err, results) => {
+        if (err) return handleDatabaseError(err, res);
+        res.render('explore', { posts: results || [] });
+    });
+});
+
+// ========== SEARCH ROUTES ==========
+
+// Search Posts
+app.get('/search', isAuthenticated, (req, res) => {
     const searchQuery = req.query.query || '';
     const userId = req.session.userId;
 
@@ -522,26 +513,17 @@ app.get('/search', (req, res) => {
     db.query(sql, [`%${searchQuery}%`, `%${searchQuery}%`], (err, results) => {
         if (err) return handleDatabaseError(err, res);
 
-        const userQuery = 'SELECT username FROM users WHERE id = ?';
-        db.query(userQuery, [userId], (err, userResults) => {
-            if (err) return handleDatabaseError(err, res);
-
-            if (userResults.length === 0) {
-                return res.redirect('/login');
-            }
-
-            const username = userResults[0].username;
-
-            res.render('dashboard', {
-                posts: results || [],
-                allPosts: results || [],
-                username: username,
-                userId: userId,
-                query: searchQuery
-            });
+        res.render('dashboard', {
+            posts: results || [],
+            allPosts: results || [],
+            username: req.session.username,
+            userId: userId,
+            query: searchQuery
         });
     });
 });
+
+// ========== AUTH ROUTES ==========
 
 // Logout
 app.get('/logout', (req, res) => {
@@ -555,26 +537,22 @@ app.get('/logout', (req, res) => {
 });
 
 // Delete Account
-app.delete('/delete-account', (req, res) => {
+app.delete('/delete-account', isAuthenticated, (req, res) => {
     const userId = req.session.userId;
 
-    if (!userId) {
-        return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    // Delete user's comments
+    // Delete comments
     const deleteCommentsQuery = 'DELETE FROM comments WHERE user_id = ?';
     db.query(deleteCommentsQuery, [userId], (err) => {
         if (err) {
-            console.error('Delete comments error:', err);
+            console.error('❌ Delete comments error:', err);
             return res.status(500).json({ message: 'Internal Server Error' });
         }
 
-        // Delete user's posts
+        // Delete posts
         const deletePostsQuery = 'DELETE FROM posts WHERE user_id = ?';
         db.query(deletePostsQuery, [userId], (err) => {
             if (err) {
-                console.error('Delete posts error:', err);
+                console.error('❌ Delete posts error:', err);
                 return res.status(500).json({ message: 'Internal Server Error' });
             }
 
@@ -582,16 +560,17 @@ app.delete('/delete-account', (req, res) => {
             const deleteUserQuery = 'DELETE FROM users WHERE id = ?';
             db.query(deleteUserQuery, [userId], (err) => {
                 if (err) {
-                    console.error('Delete user error:', err);
+                    console.error('❌ Delete user error:', err);
                     return res.status(500).json({ message: 'Internal Server Error' });
                 }
 
                 // Destroy session
                 req.session.destroy((err) => {
                     if (err) {
-                        console.error('Session destruction error:', err);
+                        console.error('❌ Session destruction error:', err);
                         return res.status(500).json({ message: 'Internal Server Error' });
                     }
+
                     console.log('✅ Account deleted:', userId);
                     res.status(200).json({ message: 'Account deleted successfully' });
                 });
@@ -600,13 +579,15 @@ app.delete('/delete-account', (req, res) => {
     });
 });
 
-// 404 handler
+// ========== ERROR HANDLING ==========
+
+// 404 Handler
 app.use((req, res) => {
     res.status(404).send('Page not found');
 });
 
 // ========== START SERVER ==========
 app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`🌐 http://localhost:${PORT}`);
+    console.log(`\n✅ Server running on port ${PORT}`);
+    console.log(`🌐 http://localhost:${PORT}\n`);
 });

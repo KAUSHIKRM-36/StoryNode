@@ -1,49 +1,198 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Login</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Blogging Platform</title>
     <link rel="stylesheet" href="/css/style.css">
-
     <style>
-        .error-message {
-            color: red;
-            background-color: #ffe6e6;
-            padding: 10px;
-            border: 1px solid red;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .navbar {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+
+        .navbar-brand {
+            font-size: 24px;
+            font-weight: bold;
+            text-decoration: none;
+            color: white;
+        }
+
+        .navbar-links a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            font-weight: 500;
+            transition: opacity 0.3s;
+        }
+
+        .navbar-links a:hover {
+            opacity: 0.8;
+        }
+
+        .container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .auth-card h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+            font-size: 28px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
             border-radius: 5px;
-            margin-bottom: 15px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .auth-card button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .auth-card button:hover {
+            transform: translateY(-2px);
+        }
+
+        .auth-card button:active {
+            transform: translateY(0);
+        }
+
+        .auth-card p {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+
+        .auth-card a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .auth-card a:hover {
+            text-decoration: underline;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
             text-align: center;
         }
     </style>
-
-
 </head>
 <body>
     <!-- Navbar -->
     <nav class="navbar">
-        <a href="#" class="navbar-brand">Blogging Platform</a>
+        <a href="/" class="navbar-brand">📝 Blogging Platform</a>
         <div class="navbar-links">
             <a href="/register">Register</a>
         </div>
     </nav>
 
-    <!-- Centered Card -->
+    <!-- Login Card -->
     <div class="container">
         <div class="auth-card">
             <h2>Login</h2>
-            <!-- Display error message if it exists -->
+
+            <!-- Error Message -->
             <% if (typeof error !== 'undefined' && error) { %>
                 <div class="error-message">
                     <%= error %>
                 </div>
             <% } %>
-            <form action="/login" method="POST">
-                <input type="text" name="username" placeholder="Username" required>
-                <input type="password" name="password" placeholder="Password" required>
+
+            <!-- Login Form -->
+            <form method="POST" action="/login">
+                <div class="form-group">
+                    <input 
+                        type="text" 
+                        name="username" 
+                        placeholder="Username" 
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <input 
+                        type="password" 
+                        name="password" 
+                        placeholder="Password" 
+                        required
+                    >
+                </div>
+
                 <button type="submit">Login</button>
             </form>
+
             <p>Don't have an account? <a href="/register">Register here</a></p>
         </div>
     </div>
+
+    <script>
+        console.log('Login page loaded');
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const username = document.querySelector('input[name="username"]').value;
+            const password = document.querySelector('input[name="password"]').value;
+            console.log('Form submitted:', { username, password: '***' });
+        });
+    </script>
 </body>
 </html>
