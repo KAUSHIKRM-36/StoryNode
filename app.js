@@ -202,59 +202,51 @@ app.get('/login', (req, res) => {
     res.render('login', { error: null });
 });
 
-// Login POST
+// User Login - POST
 app.post('/login', (req, res) => {
-    console.log('\n===== LOGIN ATTEMPT =====');
-    console.log('Body:', req.body);
+    console.log('\n========== LOGIN POST RECEIVED ==========');
+    console.log('Content-Type:', req.get('content-type'));
+    console.log('Full request body:', JSON.stringify(req.body));
+    console.log('Username field:', req.body.username);
+    console.log('Password field:', req.body.password);
+    console.log('=========================================\n');
 
-    const { username, password } = req.body;
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Debug Info</title>
+            <style>
+                body { font-family: Arial; padding: 20px; background: #f0f0f0; }
+                .box { background: white; padding: 20px; border-radius: 5px; margin: 10px 0; }
+                .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+                .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+                pre { background: #222; color: #0f0; padding: 10px; border-radius: 5px; overflow-x: auto; }
+            </style>
+        </head>
+        <body>
+            <div class="box success">
+                <h2>✅ LOGIN POST RECEIVED!</h2>
+                <p>The form data is reaching the server correctly.</p>
+            </div>
+            
+            <div class="box">
+                <h3>Received Data:</h3>
+                <pre>
+Username: ${req.body.username || 'NOT RECEIVED'}
+Password: ${req.body.password ? '(password received)' : 'NOT RECEIVED'}
+                </pre>
+            </div>
 
-    // Validation
-    if (!username || !password) {
-        console.log('❌ Missing username or password');
-        return res.render('login', { 
-            error: 'Username and password are required.' 
-        });
-    }
+            <div class="box">
+                <h3>Raw Body:</h3>
+                <pre>${JSON.stringify(req.body, null, 2)}</pre>
+            </div>
 
-    console.log('🔍 Searching for user:', username);
-    const query = 'SELECT id, username, password FROM users WHERE username = ?';
-
-    db.query(query, [username], (err, results) => {
-        if (err) {
-            console.error('❌ Query error:', err);
-            return res.render('login', { 
-                error: 'Database error. Please try again.' 
-            });
-        }
-
-        if (results.length === 0) {
-            console.log('❌ User not found:', username);
-            return res.render('login', { 
-                error: 'Invalid username or password.' 
-            });
-        }
-
-        const user = results[0];
-        console.log('✅ User found:', user.username);
-
-        // Compare password
-        const isPasswordValid = bcrypt.compareSync(password, user.password);
-        console.log('🔑 Password valid:', isPasswordValid);
-
-        if (isPasswordValid) {
-            console.log('✅ LOGIN SUCCESSFUL!');
-            req.session.userId = user.id;
-            req.session.username = user.username;
-            console.log('✅ Session data set:', { userId: user.id, username: user.username });
-            return res.redirect('/dashboard');
-        } else {
-            console.log('❌ Password invalid');
-            return res.render('login', { 
-                error: 'Invalid username or password.' 
-            });
-        }
-    });
+            <a href="/login">← Back to Login</a>
+        </body>
+        </html>
+    `);
 });
 
 // ========== DASHBOARD ROUTES ==========
