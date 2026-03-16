@@ -3,11 +3,20 @@ const bodyParser = require('body-parser');
 const session = require('express-session');
 const mysql = require('mysql2');
 const path = require('path');
+
+
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
 const PORT = 3000;
+
+
+
+
+
+
+
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -20,16 +29,13 @@ app.use(session({
 }));
 
 // Database connection
-const db = mysql.createConnection({
-    host: process.env.MYSQL_HOST,
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASSWORD,
-    database: process.env.MYSQL_DATABASE,
-    port: process.env.MYSQL_PORT || 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
+
+
+
+
+
+
+
 // Parse MYSQL_URL
 function parseConnectionString(url) {
     const urlObj = new URL(url);
