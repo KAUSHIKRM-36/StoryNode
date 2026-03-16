@@ -10,7 +10,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ========== DATABASE CONFIGURATION ==========
-// Parse MYSQL_URL from Railway environment
 const MYSQL_URL = process.env.MYSQL_URL;
 let dbConfig = {};
 
@@ -52,32 +51,22 @@ console.log('MySQL Config:', {
     password: '***'
 });
 
-const db = mysql.createConnection(dbConfig);
+// ✅ Use createPool instead of createConnection
+const db = mysql.createPool(dbConfig);
 
-db.connect((err) => {
+// Test database connection
+db.getConnection((err, connection) => {
     if (err) {
-        console.error('Initial connection failed:', err);
-        setTimeout(() => db.connect(), 5000);
+        console.error('Database connection failed:', err);
     } else {
-        console.log('Connected to MySQL!');
-    }
-});
-
-db.on('error', (err) => {
-    console.error('Database error:', err);
-    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-        db.connect();
-    }
-    if (err.code === 'ER_CON_COUNT_ERROR') {
-        setTimeout(() => db.connect(), 5000);
-    }
-    if (err.code === 'ER_AUTH_PLUGIN_CANNOT_LOAD') {
-        setTimeout(() => db.connect(), 5000);
+        console.log('✅ Connected to MySQL!');
+        connection.release();
     }
 });
 
 // ========== MIDDLEWARE ==========
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
@@ -100,105 +89,170 @@ const handleDatabaseError = (err, res) => {
     res.status(500).send('Internal Server Error');
 };
 
-// Routes
+// ========== ROUTES ==========
 
-// Home Page (index.ejs)
+// Home Page
 app.get('/', (req, res) => {
-    const query = 'SELECT * FROM posts ORDER BY id DESC LIMIT 3'; // Fetch latest 3 posts
+    const query = 'SELECT * FROM posts ORDER BY id DESC LIMIT 3';
     db.query(query, (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        res.render('index', { posts: results });
+        res.render('index', { posts: results || [] });
     });
 });
 
-// User Registration
+// User Registration - GET
 app.get('/register', (req, res) => {
-    res.render('register');
+    res.render('register', { error: null });
 });
 
+// User Registration - POST
 app.post('/register', (req, res) => {
     const { username, password } = req.body;
     
-    // First check if username exists
-    const checkQuery = 'SELECT * FROM users WHERE username = ?';
+    // Validate input
+    if (!username || !password) {
+        return res.render('register', { 
+            error: 'Username and password are required.' 
+        });
+    }
+
+    if (password.length < 6) {
+        return res.render('register', { 
+            error: 'Password must be at least 6 characters long.' 
+        });
+    }
+
+    if (username.length < 3) {
+        return res.render('register', { 
+            error: 'Username must be at least 3 characters long.' 
+        });
+    }
+    
+    // Check if username already exists
+    const checkQuery = 'SELECT id FROM users WHERE username = ?';
     db.query(checkQuery, [username], (err, results) => {
-        if (err) return handleDatabaseError(err, res);
+        if (err) {
+            console.error('Check username error:', err);
+            return res.render('register', { 
+                error: 'Database error. Please try again.' 
+            });
+        }
         
         if (results.length > 0) {
-            // Username already exists
             return res.render('register', { 
                 error: 'Username already exists. Please choose a different one.' 
             });
         }
         
-        // Proceed with registration
-        const hashedPassword = bcrypt.hashSync(password, 10);
-        const insertQuery = 'INSERT INTO users (username, password) VALUES (?, ?)';
-        db.query(insertQuery, [username, hashedPassword], (err) => {
-            if (err) return handleDatabaseError(err, res);
-            res.redirect('/login');
-        });
-    });
-});
-
-// User Login
-app.get('/login', (req, res) => {
-    res.render('login', { error: null }); // Render login page without any error
-});
-
-app.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    const query = 'SELECT * FROM users WHERE username = ?';
-    db.query(query, [username], (err, results) => {
-        if (err) return handleDatabaseError(err, res);
-
-        if (results.length > 0 && bcrypt.compareSync(password, results[0].password)) {
-            // Login successful
-            req.session.userId = results[0].id;
-            req.session.username = results[0].username; // Store username in session
-            res.redirect('/dashboard');
-        } else {
-            // Login failed
-            res.render('login', { error: 'Invalid username or password' }); // Pass error message to the template
+        // Hash password and insert user
+        try {
+            const hashedPassword = bcrypt.hashSync(password, 10);
+            const insertQuery = 'INSERT INTO users (username, password) VALUES (?, ?)';
+            
+            db.query(insertQuery, [username, hashedPassword], (err, results) => {
+                if (err) {
+                    console.error('Insert user error:', err);
+                    return res.render('register', { 
+                        error: 'Failed to create account. Please try again.' 
+                    });
+                }
+                console.log('✅ User registered:', username);
+                res.redirect('/login');
+            });
+        } catch (hashErr) {
+            console.error('Hash error:', hashErr);
+            return res.render('register', { 
+                error: 'An error occurred. Please try again.' 
+            });
         }
     });
 });
 
-// dashboard
+// User Login - GET
+app.get('/login', (req, res) => {
+    res.render('login', { error: null });
+});
+
+// User Login - POST
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    
+    // Validate input
+    if (!username || !password) {
+        return res.render('login', { 
+            error: 'Username and password are required.' 
+        });
+    }
+    
+    const query = 'SELECT id, username, password FROM users WHERE username = ?';
+    db.query(query, [username], (err, results) => {
+        if (err) {
+            console.error('Login query error:', err);
+            return res.render('login', { 
+                error: 'Database error. Please try again.' 
+            });
+        }
+
+        if (results.length === 0) {
+            console.log('❌ User not found:', username);
+            return res.render('login', { 
+                error: 'Invalid username or password' 
+            });
+        }
+
+        // Compare password
+        const user = results[0];
+        const isPasswordValid = bcrypt.compareSync(password, user.password);
+
+        if (isPasswordValid) {
+            req.session.userId = user.id;
+            req.session.username = user.username;
+            console.log('✅ Login successful:', username);
+            res.redirect('/dashboard');
+        } else {
+            console.log('❌ Invalid password for:', username);
+            res.render('login', { 
+                error: 'Invalid username or password' 
+            });
+        }
+    });
+});
+
+// Dashboard
 app.get('/dashboard', (req, res) => {
     if (!req.session.userId) {
         return res.redirect('/login');
     }
 
-    const userId = req.session.userId; // Get the userId from the session
+    const userId = req.session.userId;
     
-    // Query to get the user's details (including the username) from the database
-    const userQuery = 'SELECT username FROM users WHERE id = ?'; // Assuming users table has id and username
+    // Get user details
+    const userQuery = 'SELECT username FROM users WHERE id = ?';
     db.query(userQuery, [userId], (err, userResults) => {
         if (err) return handleDatabaseError(err, res);
 
-        // Check if the user exists
         if (userResults.length === 0) {
-            return res.redirect('/login'); // If user not found, redirect to login
+            req.session.destroy();
+            return res.redirect('/login');
         }
 
-        const username = userResults[0].username; // Get the username from the query result
+        const username = userResults[0].username;
         
-        // Query to fetch all posts in the database
-        const allPostsQuery = 'SELECT * FROM posts';
+        // Get all posts
+        const allPostsQuery = 'SELECT * FROM posts ORDER BY id DESC';
         db.query(allPostsQuery, (err, allPostResults) => {
             if (err) return handleDatabaseError(err, res);
             
-            // Query to fetch the posts associated with this user
-            const postsQuery = 'SELECT * FROM posts WHERE user_id = ?';
+            // Get user's posts
+            const postsQuery = 'SELECT * FROM posts WHERE user_id = ? ORDER BY id DESC';
             db.query(postsQuery, [userId], (err, postResults) => {
                 if (err) return handleDatabaseError(err, res);
                 
-                // Render the dashboard template and pass all posts and user-specific posts
                 res.render('dashboard', { 
-                    posts: postResults,  // Posts related to the current user
-                    allPosts: allPostResults,  // All posts in the database
-                    username: username 
+                    posts: postResults || [],
+                    allPosts: allPostResults || [],
+                    username: username,
+                    userId: userId
                 });
             });
         });
@@ -208,176 +262,240 @@ app.get('/dashboard', (req, res) => {
 // Post Details
 app.get('/post/:id', (req, res) => {
     const postId = req.params.id;
+    
+    // Get post
     const query = 'SELECT * FROM posts WHERE id = ?';
     db.query(query, [postId], (err, results) => {
         if (err) return handleDatabaseError(err, res);
+        
+        if (results.length === 0) {
+            return res.status(404).send('Post not found');
+        }
+
         const post = results[0];
-        res.render('post', { post, userId: req.session.userId });
+        
+        // Get comments
+        const commentsQuery = 'SELECT c.*, u.username FROM comments c JOIN users u ON c.user_id = u.id WHERE c.post_id = ? ORDER BY c.id DESC';
+        db.query(commentsQuery, [postId], (err, comments) => {
+            if (err) return handleDatabaseError(err, res);
+            
+            res.render('post', { 
+                post: post, 
+                comments: comments || [],
+                userId: req.session.userId,
+                username: req.session.username
+            });
+        });
     });
 });
 
-// Render the Create Post Form
+// Create Post - GET
 app.get('/create-post', (req, res) => {
     if (!req.session.userId) {
-        return res.redirect('/login'); // Ensure the user is logged in
+        return res.redirect('/login');
     }
-    res.render('create-post'); // Render the create-post.ejs file
+    res.render('create-post');
 });
 
-// Handle Create Post Form Submission
+// Create Post - POST
 app.post('/posts', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).send('Unauthorized');
+    }
+
     const { title, content, category } = req.body;
     const userId = req.session.userId;
-    const writerName = req.session.username; // Use username from session
+    const writerName = req.session.username;
 
-    // Validate required fields
+    // Validate
     if (!title || !content || !category) {
         return res.status(400).send('Title, content, and category are required.');
     }
 
-    // Insert the new post into the database
     const query = `
-        INSERT INTO posts (title, content, category, user_id, writer_name)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO posts (title, content, category, user_id, writer_name, created_at)
+        VALUES (?, ?, ?, ?, ?, NOW())
     `;
+    
     db.query(query, [title, content, category, userId, writerName], (err, results) => {
         if (err) {
-            console.error('Database error:', err);
+            console.error('Create post error:', err);
             return res.status(500).send('Internal Server Error');
         }
-        res.redirect('/dashboard'); // Redirect to the dashboard after successful post creation
+        console.log('✅ Post created by:', writerName);
+        res.redirect('/dashboard');
+    });
+});
+
+// Edit Post - GET
+app.get('/edit-post/:id', (req, res) => {
+    if (!req.session.userId) {
+        return res.redirect('/login');
+    }
+
+    const postId = req.params.id;
+    const userId = req.session.userId;
+
+    const query = 'SELECT * FROM posts WHERE id = ? AND user_id = ?';
+    db.query(query, [postId, userId], (err, results) => {
+        if (err) return handleDatabaseError(err, res);
+        
+        if (results.length === 0) {
+            return res.status(403).send('You are not authorized to edit this post');
+        }
+
+        res.render('edit-post', { post: results[0] });
+    });
+});
+
+// Update Post - POST
+app.post('/update-post/:id', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).send('Unauthorized');
+    }
+
+    const postId = req.params.id;
+    const userId = req.session.userId;
+    const { title, content, category } = req.body;
+
+    // Verify ownership
+    const checkQuery = 'SELECT user_id FROM posts WHERE id = ?';
+    db.query(checkQuery, [postId], (err, results) => {
+        if (err) return handleDatabaseError(err, res);
+        
+        if (results.length === 0 || results[0].user_id !== userId) {
+            return res.status(403).send('You are not authorized to update this post');
+        }
+
+        const updateQuery = 'UPDATE posts SET title = ?, content = ?, category = ? WHERE id = ?';
+        db.query(updateQuery, [title, content, category, postId], (err) => {
+            if (err) return handleDatabaseError(err, res);
+            console.log('✅ Post updated:', postId);
+            res.redirect('/dashboard');
+        });
     });
 });
 
 // Delete Post
 app.get('/delete-post/:id', (req, res) => {
-    const postId = req.params.id;
-    const userId = req.session.userId; // Get the logged-in user's ID
+    if (!req.session.userId) {
+        return res.redirect('/login');
+    }
 
-    // First, check if the post belongs to the logged-in user
+    const postId = req.params.id;
+    const userId = req.session.userId;
+
+    // Check ownership
     const checkQuery = 'SELECT user_id FROM posts WHERE id = ?';
     db.query(checkQuery, [postId], (err, results) => {
-        if (err) {
-            console.error('Database error:', err);
-            return res.status(500).send('Internal Server Error');
-        }
+        if (err) return handleDatabaseError(err, res);
 
         if (results.length === 0) {
             return res.status(404).send('Post not found');
         }
 
-        const postUserId = results[0].user_id;
-
-        // Ensure the logged-in user is the owner of the post
-        if (postUserId !== userId) {
+        if (results[0].user_id !== userId) {
             return res.status(403).send('You are not authorized to delete this post');
         }
 
-        // Delete associated comments first
+        // Delete comments first
         const deleteCommentsQuery = 'DELETE FROM comments WHERE post_id = ?';
         db.query(deleteCommentsQuery, [postId], (err) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).send('Internal Server Error');
-            }
+            if (err) return handleDatabaseError(err, res);
 
-            // Now delete the post
+            // Delete post
             const deletePostQuery = 'DELETE FROM posts WHERE id = ?';
             db.query(deletePostQuery, [postId], (err) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    return res.status(500).send('Internal Server Error');
-                }
-                res.redirect('/dashboard'); // Redirect to the dashboard after successful deletion
+                if (err) return handleDatabaseError(err, res);
+                console.log('✅ Post deleted:', postId);
+                res.redirect('/dashboard');
             });
         });
     });
 });
 
-// Edit Post
-app.get('/edit-post/:id', (req, res) => {
-    const postId = req.params.id;
-    const query = 'SELECT * FROM posts WHERE id = ?';
-    db.query(query, [postId], (err, results) => {
-        if (err) return handleDatabaseError(err, res);
-        const post = results[0];
-        res.render('edit-post', { post });
-    });
-});
-
-// Update Post
-app.post('/update-post/:id', (req, res) => {
-    const postId = req.params.id;
-    const { title, content, category } = req.body;
-    const query = 'UPDATE posts SET title = ?, content = ?, category = ? WHERE id = ?';
-    db.query(query, [title, content, category, postId], (err) => {
-        if (err) return handleDatabaseError(err, res);
-        res.redirect('/dashboard');
-    });
-});
-
-// Explore Posts Page
+// Explore Posts
 app.get('/explore-posts', (req, res) => {
     if (!req.session.userId) {
         return res.redirect('/login');
     }
-    const query = 'SELECT * FROM posts'; // Fetch all posts
+
+    const query = 'SELECT * FROM posts ORDER BY id DESC';
     db.query(query, (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        res.render('explore', { posts: results });
+        res.render('explore', { posts: results || [] });
     });
 });
 
-// Add a Comment
+// Add Comment
 app.post('/comments', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
     const { postId, comment } = req.body;
     const userId = req.session.userId;
-    const query = 'INSERT INTO comments (post_id, user_id, comment) VALUES (?, ?, ?)';
-    db.query(query, [postId, userId, comment], (err) => {
-        if (err) return handleDatabaseError(err, res);
-        res.redirect('/dashboard');
+
+    if (!postId || !comment) {
+        return res.status(400).json({ message: 'Post ID and comment are required' });
+    }
+
+    const query = 'INSERT INTO comments (post_id, user_id, comment, created_at) VALUES (?, ?, ?, NOW())';
+    db.query(query, [postId, userId, comment], (err, results) => {
+        if (err) {
+            console.error('Add comment error:', err);
+            return res.status(500).json({ message: 'Failed to add comment' });
+        }
+        console.log('✅ Comment added');
+        res.json({ message: 'Comment added successfully' });
     });
 });
 
-// Search Posts Route
+// Search Posts
 app.get('/search', (req, res) => {
-    const query = req.query.query;  // Get the search query from the URL
+    if (!req.session.userId) {
+        return res.redirect('/login');
+    }
+
+    const searchQuery = req.query.query || '';
     const userId = req.session.userId;
-    
-    // Query to search posts by title or content
-    const sql = 'SELECT * FROM posts WHERE title LIKE ? OR content LIKE ?';
-    db.query(sql, [`%${query}%`, `%${query}%`], (err, results) => {
+
+    if (!searchQuery) {
+        return res.redirect('/dashboard');
+    }
+
+    const sql = 'SELECT * FROM posts WHERE title LIKE ? OR content LIKE ? ORDER BY id DESC';
+    db.query(sql, [`%${searchQuery}%`, `%${searchQuery}%`], (err, results) => {
         if (err) return handleDatabaseError(err, res);
 
-        // Query to get the user's details (including the username)
         const userQuery = 'SELECT username FROM users WHERE id = ?';
         db.query(userQuery, [userId], (err, userResults) => {
             if (err) return handleDatabaseError(err, res);
 
             if (userResults.length === 0) {
-                return res.redirect('/login'); // If user not found, redirect to login
+                return res.redirect('/login');
             }
 
             const username = userResults[0].username;
 
-            // Render the dashboard template with search results
             res.render('dashboard', {
-                posts: results,  // Filtered posts based on search
-                allPosts: results, // Pass the filtered posts to the 'allPosts' variable
+                posts: results || [],
+                allPosts: results || [],
                 username: username,
-                query: query  // Pass the search query back to the view
+                userId: userId,
+                query: searchQuery
             });
         });
     });
 });
 
-
 // Logout
 app.get('/logout', (req, res) => {
     req.session.destroy((err) => {
         if (err) {
-            console.error('Error destroying session:', err);
+            console.error('Logout error:', err);
         }
+        console.log('✅ User logged out');
         res.redirect('/');
     });
 });
@@ -390,26 +508,51 @@ app.delete('/delete-account', (req, res) => {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const deleteQuery = 'DELETE FROM users WHERE id = ?';
-    db.query(deleteQuery, [userId], (err, results) => {
+    // Delete user's comments
+    const deleteCommentsQuery = 'DELETE FROM comments WHERE user_id = ?';
+    db.query(deleteCommentsQuery, [userId], (err) => {
         if (err) {
-            console.error('Database error:', err);
+            console.error('Delete comments error:', err);
             return res.status(500).json({ message: 'Internal Server Error' });
         }
 
-        // Destroy the session after account deletion
-        req.session.destroy((err) => {
+        // Delete user's posts
+        const deletePostsQuery = 'DELETE FROM posts WHERE user_id = ?';
+        db.query(deletePostsQuery, [userId], (err) => {
             if (err) {
-                console.error('Session destruction error:', err);
+                console.error('Delete posts error:', err);
                 return res.status(500).json({ message: 'Internal Server Error' });
             }
-            res.status(200).json({ message: 'Account deleted successfully' });
+
+            // Delete user
+            const deleteUserQuery = 'DELETE FROM users WHERE id = ?';
+            db.query(deleteUserQuery, [userId], (err) => {
+                if (err) {
+                    console.error('Delete user error:', err);
+                    return res.status(500).json({ message: 'Internal Server Error' });
+                }
+
+                // Destroy session
+                req.session.destroy((err) => {
+                    if (err) {
+                        console.error('Session destruction error:', err);
+                        return res.status(500).json({ message: 'Internal Server Error' });
+                    }
+                    console.log('✅ Account deleted:', userId);
+                    res.status(200).json({ message: 'Account deleted successfully' });
+                });
+            });
         });
     });
 });
 
+// 404 handler
+app.use((req, res) => {
+    res.status(404).send('Page not found');
+});
 
 // ========== START SERVER ==========
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`✅ Server running on port ${PORT}`);
+    console.log(`🌐 http://localhost:${PORT}`);
 });
