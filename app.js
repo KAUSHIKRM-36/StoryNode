@@ -7,33 +7,46 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
 // Middleware
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-// In-memory session store
 app.use(session({
     secret: process.env.SESSION_SECRET || "dev-storynode_super_secret_key_123",
     resave: false,
-    saveUninitialized: false,
-    cookie: { 
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 1000 * 60 * 60 * 24
-    }
+    saveUninitialized: true,
+    cookie: { secure: false } // Set to true if using HTTPS
 }));
 
-// Database connection - FIXED
+// Database connection
 const db = mysql.createConnection({
-    host: process.env.MYSQL_HOST || 'mysql.railway.internal',
-    user: process.env.MYSQL_USER || 'root',
-    password: process.env.MYSQL_PASSWORD || 'mgLsyNFcNWXRAVmltePDBnJDNWkfenKs',
-    database: process.env.MYSQL_DATABASE || 'railway',
-    port: process.env.MYSQL_PORT || 3306
+    host: process.env.MYSQL_HOST,
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD,
+    database: process.env.MYSQL_DATABASE,
+    port: process.env.MYSQL_PORT || 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
+// Parse MYSQL_URL
+function parseConnectionString(url) {
+    const urlObj = new URL(url);
+    return {
+        host: urlObj.hostname,
+        user: urlObj.username,
+        password: urlObj.password,
+        database: urlObj.pathname.slice(1),
+        port: parseInt(urlObj.port) || 3306,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+    };
+}
+
+const connectionConfig = parseConnectionString(process.env.MYSQL_URL);
+const db = mysql.createConnection(connectionConfig);
 
 db.connect((err) => {
     if (err) {
@@ -67,48 +80,38 @@ const handleDatabaseError = (err, res) => {
     res.status(500).send('Internal Server Error');
 };
 
-// Health check
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'OK' });
-});
+// Routes
 
-// Home Page
+// Home Page (index.ejs)
 app.get('/', (req, res) => {
-    const query = 'SELECT * FROM posts ORDER BY id DESC LIMIT 3';
+    const query = 'SELECT * FROM posts ORDER BY id DESC LIMIT 3'; // Fetch latest 3 posts
     db.query(query, (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        res.render('index', { posts: results }, (err, html) => {
-            if (err) {
-                console.error('Render error:', err.message);
-                return res.status(500).send('Error: ' + err.message);
-            }
-            res.send(html);
-        });
+        res.render('index', { posts: results });
     });
 });
 
 // User Registration
 app.get('/register', (req, res) => {
-    res.render('register', { error: null }, (err, html) => {
-        if (err) return res.status(500).send('Error: ' + err.message);
-        res.send(html);
-    });
+    res.render('register');
 });
 
 app.post('/register', (req, res) => {
     const { username, password } = req.body;
 
+    // First check if username exists
     const checkQuery = 'SELECT * FROM users WHERE username = ?';
     db.query(checkQuery, [username], (err, results) => {
         if (err) return handleDatabaseError(err, res);
 
         if (results.length > 0) {
-            return res.render('register', { error: 'Username already exists' }, (err, html) => {
-                if (err) return res.status(500).send('Error');
-                res.send(html);
+            // Username already exists
+            return res.render('register', { 
+                error: 'Username already exists. Please choose a different one.' 
             });
         }
 
+        // Proceed with registration
         const hashedPassword = bcrypt.hashSync(password, 10);
         const insertQuery = 'INSERT INTO users (username, password) VALUES (?, ?)';
         db.query(insertQuery, [username, hashedPassword], (err) => {
@@ -120,10 +123,7 @@ app.post('/register', (req, res) => {
 
 // User Login
 app.get('/login', (req, res) => {
-    res.render('login', { error: null }, (err, html) => {
-        if (err) return res.status(500).send('Error: ' + err.message);
-        res.send(html);
-    });
+    res.render('login', { error: null }); // Render login page without any error
 });
 
 app.post('/login', (req, res) => {
@@ -133,54 +133,52 @@ app.post('/login', (req, res) => {
         if (err) return handleDatabaseError(err, res);
 
         if (results.length > 0 && bcrypt.compareSync(password, results[0].password)) {
+            // Login successful
             req.session.userId = results[0].id;
-            req.session.username = results[0].username;
+            req.session.username = results[0].username; // Store username in session
             res.redirect('/dashboard');
         } else {
-            res.render('login', { error: 'Invalid username or password' }, (err, html) => {
-                if (err) return res.status(500).send('Error');
-                res.send(html);
-            });
+            // Login failed
+            res.render('login', { error: 'Invalid username or password' }); // Pass error message to the template
         }
     });
 });
 
-// Dashboard
+// dashboard
 app.get('/dashboard', (req, res) => {
     if (!req.session.userId) {
         return res.redirect('/login');
     }
 
-    const userId = req.session.userId;
-    const userQuery = 'SELECT username FROM users WHERE id = ?';
-    
+    const userId = req.session.userId; // Get the userId from the session
+
+    // Query to get the user's details (including the username) from the database
+    const userQuery = 'SELECT username FROM users WHERE id = ?'; // Assuming users table has id and username
     db.query(userQuery, [userId], (err, userResults) => {
         if (err) return handleDatabaseError(err, res);
 
+        // Check if the user exists
         if (userResults.length === 0) {
-            return res.redirect('/login');
+            return res.redirect('/login'); // If user not found, redirect to login
         }
 
-        const username = userResults[0].username;
+        const username = userResults[0].username; // Get the username from the query result
+
+        // Query to fetch all posts in the database
         const allPostsQuery = 'SELECT * FROM posts';
-        
         db.query(allPostsQuery, (err, allPostResults) => {
             if (err) return handleDatabaseError(err, res);
 
+            // Query to fetch the posts associated with this user
             const postsQuery = 'SELECT * FROM posts WHERE user_id = ?';
             db.query(postsQuery, [userId], (err, postResults) => {
                 if (err) return handleDatabaseError(err, res);
 
+                // Render the dashboard template and pass all posts and user-specific posts
                 res.render('dashboard', { 
-                    posts: postResults,
-                    allPosts: allPostResults,
+                    posts: postResults,  // Posts related to the current user
+                    allPosts: allPostResults,  // All posts in the database
                     username: username 
-                }, (err, html) => {
-                    if (err) {
-                        console.error('Render error:', err.message);
-                        return res.status(500).send('Error: ' + err.message);
-                    }
-                    res.send(html);
                 });
             });
         });
@@ -193,67 +191,84 @@ app.get('/post/:id', (req, res) => {
     const query = 'SELECT * FROM posts WHERE id = ?';
     db.query(query, [postId], (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        if (results.length === 0) return res.status(404).send('Post not found');
-        res.render('post', { post: results[0], userId: req.session.userId }, (err, html) => {
-            if (err) return res.status(500).send('Error: ' + err.message);
-            res.send(html);
-        });
+        const post = results[0];
+        res.render('post', { post, userId: req.session.userId });
     });
 });
 
-// Create Post Form
+// Render the Create Post Form
 app.get('/create-post', (req, res) => {
     if (!req.session.userId) {
-        return res.redirect('/login');
+        return res.redirect('/login'); // Ensure the user is logged in
     }
-    res.render('create-post', {}, (err, html) => {
-        if (err) return res.status(500).send('Error: ' + err.message);
-        res.send(html);
-    });
+    res.render('create-post'); // Render the create-post.ejs file
 });
 
-// Create Post
+// Handle Create Post Form Submission
 app.post('/posts', (req, res) => {
     const { title, content, category } = req.body;
     const userId = req.session.userId;
-    const writerName = req.session.username;
+    const writerName = req.session.username; // Use username from session
 
+    // Validate required fields
     if (!title || !content || !category) {
         return res.status(400).send('Title, content, and category are required.');
     }
 
-    const query = 'INSERT INTO posts (title, content, category, user_id, writer_name) VALUES (?, ?, ?, ?, ?)';
-    db.query(query, [title, content, category, userId, writerName], (err) => {
-        if (err) return handleDatabaseError(err, res);
-        res.redirect('/dashboard');
+    // Insert the new post into the database
+    const query = `
+        INSERT INTO posts (title, content, category, user_id, writer_name)
+        VALUES (?, ?, ?, ?, ?)
+    `;
+    db.query(query, [title, content, category, userId, writerName], (err, results) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).send('Internal Server Error');
+        }
+        res.redirect('/dashboard'); // Redirect to the dashboard after successful post creation
     });
 });
 
 // Delete Post
 app.get('/delete-post/:id', (req, res) => {
     const postId = req.params.id;
-    const userId = req.session.userId;
+    const userId = req.session.userId; // Get the logged-in user's ID
 
+    // First, check if the post belongs to the logged-in user
     const checkQuery = 'SELECT user_id FROM posts WHERE id = ?';
     db.query(checkQuery, [postId], (err, results) => {
-        if (err) return handleDatabaseError(err, res);
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).send('Internal Server Error');
+        }
 
         if (results.length === 0) {
             return res.status(404).send('Post not found');
         }
 
-        if (results[0].user_id !== userId) {
-            return res.status(403).send('Unauthorized');
+        const postUserId = results[0].user_id;
+
+        // Ensure the logged-in user is the owner of the post
+        if (postUserId !== userId) {
+            return res.status(403).send('You are not authorized to delete this post');
         }
 
+        // Delete associated comments first
         const deleteCommentsQuery = 'DELETE FROM comments WHERE post_id = ?';
         db.query(deleteCommentsQuery, [postId], (err) => {
-            if (err) return handleDatabaseError(err, res);
+            if (err) {
+                console.error('Database error:', err);
+                return res.status(500).send('Internal Server Error');
+            }
 
+            // Now delete the post
             const deletePostQuery = 'DELETE FROM posts WHERE id = ?';
             db.query(deletePostQuery, [postId], (err) => {
-                if (err) return handleDatabaseError(err, res);
-                res.redirect('/dashboard');
+                if (err) {
+                    console.error('Database error:', err);
+                    return res.status(500).send('Internal Server Error');
+                }
+                res.redirect('/dashboard'); // Redirect to the dashboard after successful deletion
             });
         });
     });
@@ -265,11 +280,8 @@ app.get('/edit-post/:id', (req, res) => {
     const query = 'SELECT * FROM posts WHERE id = ?';
     db.query(query, [postId], (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        if (results.length === 0) return res.status(404).send('Post not found');
-        res.render('edit-post', { post: results[0] }, (err, html) => {
-            if (err) return res.status(500).send('Error: ' + err.message);
-            res.send(html);
-        });
+        const post = results[0];
+        res.render('edit-post', { post });
     });
 });
 
@@ -284,28 +296,27 @@ app.post('/update-post/:id', (req, res) => {
     });
 });
 
-// Explore Posts
+// Explore Posts Page
 app.get('/explore-posts', (req, res) => {
     if (!req.session.userId) {
         return res.redirect('/login');
     }
-    const query = 'SELECT * FROM posts';
+    const query = 'SELECT * FROM posts'; // Fetch all posts
     db.query(query, (err, results) => {
         if (err) return handleDatabaseError(err, res);
-        res.render('explore', { posts: results }, (err, html) => {
-            if (err) return res.status(500).send('Error: ' + err.message);
-            res.send(html);
-        });
+        res.render('explore', { posts: results });
     });
 });
 
-// Suggested Posts
+// Suggested Posts Route - Get posts based on liked categories
 app.get('/suggested-posts', (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const userId = req.session.userId;
+
+    // Query to get posts in categories that the user has liked
     const query = `
         SELECT DISTINCT p.* FROM posts p
         WHERE p.category IN (
@@ -328,7 +339,7 @@ app.get('/suggested-posts', (req, res) => {
     });
 });
 
-// Add Comment
+// Add a Comment
 app.post('/comments', (req, res) => {
     const { postId, comment } = req.body;
     const userId = req.session.userId;
@@ -339,40 +350,38 @@ app.post('/comments', (req, res) => {
     });
 });
 
-// Search Posts
+// Search Posts Route
 app.get('/search', (req, res) => {
-    const searchQuery = req.query.query;
+    const query = req.query.query;  // Get the search query from the URL
     const userId = req.session.userId;
 
-    if (!searchQuery) {
-        return res.redirect('/dashboard');
-    }
-
+    // Query to search posts by title or content
     const sql = 'SELECT * FROM posts WHERE title LIKE ? OR content LIKE ?';
-    db.query(sql, [`%${searchQuery}%`, `%${searchQuery}%`], (err, results) => {
+    db.query(sql, [`%${query}%`, `%${query}%`], (err, results) => {
         if (err) return handleDatabaseError(err, res);
 
+        // Query to get the user's details (including the username)
         const userQuery = 'SELECT username FROM users WHERE id = ?';
         db.query(userQuery, [userId], (err, userResults) => {
             if (err) return handleDatabaseError(err, res);
 
             if (userResults.length === 0) {
-                return res.redirect('/login');
+                return res.redirect('/login'); // If user not found, redirect to login
             }
 
             const username = userResults[0].username;
+
+            // Render the dashboard template with search results
             res.render('dashboard', {
-                posts: results,
-                allPosts: results,
+                posts: results,  // Filtered posts based on search
+                allPosts: results, // Pass the filtered posts to the 'allPosts' variable
                 username: username,
-                query: searchQuery
-            }, (err, html) => {
-                if (err) return res.status(500).send('Error: ' + err.message);
-                res.send(html);
+                query: query  // Pass the search query back to the view
             });
         });
     });
 });
+
 
 // Logout
 app.get('/logout', (req, res) => {
@@ -393,12 +402,13 @@ app.delete('/delete-account', (req, res) => {
     }
 
     const deleteQuery = 'DELETE FROM users WHERE id = ?';
-    db.query(deleteQuery, [userId], (err) => {
+    db.query(deleteQuery, [userId], (err, results) => {
         if (err) {
             console.error('Database error:', err);
             return res.status(500).json({ message: 'Internal Server Error' });
         }
 
+        // Destroy the session after account deletion
         req.session.destroy((err) => {
             if (err) {
                 console.error('Session destruction error:', err);
@@ -409,11 +419,12 @@ app.delete('/delete-account', (req, res) => {
     });
 });
 
-// Get Like Count
+// Get like count and check if user liked the post
 app.get('/post-likes/:postId', (req, res) => {
     const postId = req.params.postId;
     const userId = req.session.userId;
 
+    // Get total like count
     const countQuery = 'SELECT COUNT(*) as like_count FROM likes WHERE post_id = ?';
     db.query(countQuery, [postId], (err, results) => {
         if (err) {
@@ -423,6 +434,7 @@ app.get('/post-likes/:postId', (req, res) => {
 
         const likeCount = results[0].like_count;
 
+        // Check if current user liked this post
         if (!userId) {
             return res.json({ like_count: likeCount, user_liked: false });
         }
@@ -440,7 +452,7 @@ app.get('/post-likes/:postId', (req, res) => {
     });
 });
 
-// Toggle Like
+// Toggle like on a post
 app.post('/like/:postId', (req, res) => {
     const postId = req.params.postId;
     const userId = req.session.userId;
@@ -449,6 +461,7 @@ app.post('/like/:postId', (req, res) => {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    // Check if user already liked this post
     const checkQuery = 'SELECT * FROM likes WHERE post_id = ? AND user_id = ?';
     db.query(checkQuery, [postId, userId], (err, results) => {
         if (err) {
@@ -457,6 +470,7 @@ app.post('/like/:postId', (req, res) => {
         }
 
         if (results.length > 0) {
+            // User already liked, so remove the like (unlike)
             const deleteQuery = 'DELETE FROM likes WHERE post_id = ? AND user_id = ?';
             db.query(deleteQuery, [postId, userId], (err) => {
                 if (err) {
@@ -464,6 +478,7 @@ app.post('/like/:postId', (req, res) => {
                     return res.status(500).json({ error: 'Database error' });
                 }
 
+                // Get updated like count
                 const countQuery = 'SELECT COUNT(*) as like_count FROM likes WHERE post_id = ?';
                 db.query(countQuery, [postId], (err, results) => {
                     if (err) {
@@ -474,6 +489,7 @@ app.post('/like/:postId', (req, res) => {
                 });
             });
         } else {
+            // User hasn't liked yet, so add the like
             const insertQuery = 'INSERT INTO likes (post_id, user_id) VALUES (?, ?)';
             db.query(insertQuery, [postId, userId], (err) => {
                 if (err) {
@@ -481,6 +497,7 @@ app.post('/like/:postId', (req, res) => {
                     return res.status(500).json({ error: 'Database error' });
                 }
 
+                // Get updated like count
                 const countQuery = 'SELECT COUNT(*) as like_count FROM likes WHERE post_id = ?';
                 db.query(countQuery, [postId], (err, results) => {
                     if (err) {
@@ -494,13 +511,6 @@ app.post('/like/:postId', (req, res) => {
     });
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-    console.error('Error:', err.message);
-    res.status(500).send('Internal Server Error');
-});
-
 // Start the server
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
