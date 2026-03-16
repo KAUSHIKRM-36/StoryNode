@@ -7,16 +7,12 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const { createClient } = require('redis');
-const { RedisStore } = require('connect-redis');
+const connectRedis = require('connect-redis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Check if Redis URL exists
-if (!process.env.REDIS_URL) {
-  console.error("REDIS_URL is missing in environment variables");
-  process.exit(1);
-}
+const RedisStore = connectRedis(session);
 
 // Redis client
 const redisClient = createClient({
@@ -33,23 +29,20 @@ redisClient.on("error", (err) => {
 
 async function startServer() {
   try {
-    // connect to Redis
+
     await redisClient.connect();
 
     const redisStore = new RedisStore({
-      client: redisClient,
-      prefix: "sess:"
+      client: redisClient
     });
 
-    // Middleware
     app.use(bodyParser.urlencoded({ extended: true }));
     app.use(express.static(path.join(__dirname, 'public')));
 
-    // Session middleware
     app.use(
       session({
         store: redisStore,
-        secret: process.env.SESSION_SECRET || "dev-secret",
+        secret: process.env.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
         cookie: {
@@ -59,14 +52,12 @@ async function startServer() {
       })
     );
 
-    // Start server
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
 
   } catch (err) {
     console.error("Failed to start server:", err);
-    process.exit(1);
   }
 }
 
