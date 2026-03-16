@@ -150,6 +150,11 @@
             display: block;
         }
 
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
         /* Posts Container */
         .posts-wrapper {
             margin-top: 40px;
@@ -167,6 +172,88 @@
             padding: 60px 40px;
             color: #999;
             font-size: 16px;
+        }
+
+        /* Post Card */
+        .post-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .post-card:hover {
+            border-color: #0059b3;
+            box-shadow: 0 4px 12px rgba(0, 89, 179, 0.1);
+        }
+
+        .post-content-wrapper {
+            cursor: pointer;
+            margin-bottom: 16px;
+        }
+
+        .post-card h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+
+        .post-content {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }
+
+        .post-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #999;
+        }
+
+        .category {
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            color: #0059b3;
+        }
+
+        .post-footer {
+            border-top: 1px solid #f0f0f0;
+            padding-top: 12px;
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .like-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #999;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            padding: 4px 8px;
+        }
+
+        .like-btn:hover {
+            color: #0059b3;
+        }
+
+        .like-btn.liked {
+            color: #ff4458;
+        }
+
+        .like-count {
+            font-size: 12px;
         }
 
         /* Responsive */
@@ -270,14 +357,12 @@
         <a href="/" class="navbar-brand">Blogging Platform</a>
         <div class="navbar-links">
             <a href="/create-post">Create</a>
-           
-            <!-- User Profile Dropdown -->
             <div class="user-profile">
-                <i class="fas fa-user-circle" id="profile-icon"></i> <!-- User Icon -->
+                <i class="fas fa-user-circle" id="profile-icon"></i>
                 <div class="dropdown-content" id="dropdown-content">
-                    <i class="fas fa-user-circle"></i> <!-- User Icon -->
-                    <span><%= username %></span> <!-- Display Username -->
-                    <button href="#" id="delete-account-link">Delete Account</button>
+                    <i class="fas fa-user-circle"></i>
+                    <span><%= username %></span>
+                    <button id="delete-account-link">Delete Account</button>
                     <button onclick="window.location.href='/logout';">Logout</button>
                 </div>
             </div>
@@ -360,51 +445,45 @@
             <div class="posts-wrapper">
                 <div class="posts-container" id="suggested-posts-container">
                     <div class="no-posts-message">
-                        <p class="loading">Loading suggested posts...</p>
+                        <p>Loading suggested posts...</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
     <script>
-        // Get the modal and links
         const deleteAccountModal = document.getElementById('delete-account-modal');
         const deleteAccountLink = document.getElementById('delete-account-link');
         const confirmDeleteButton = document.getElementById('confirm-delete');
         const cancelDeleteButton = document.getElementById('cancel-delete');
     
-        // Open the modal when "Delete Account" is clicked
-        deleteAccountLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            deleteAccountModal.style.display = 'flex';
-        });
+        if (deleteAccountLink) {
+            deleteAccountLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                deleteAccountModal.style.display = 'flex';
+            });
+        }
     
-        // Close the modal when "Cancel" is clicked
         cancelDeleteButton.addEventListener('click', () => {
             deleteAccountModal.style.display = 'none';
         });
     
-        // Close modal when clicking outside of it
         deleteAccountModal.addEventListener('click', (e) => {
             if (e.target === deleteAccountModal) {
                 deleteAccountModal.style.display = 'none';
             }
         });
     
-        // Handle account deletion when "Delete" is clicked
         confirmDeleteButton.addEventListener('click', async () => {
             try {
                 const response = await fetch('/delete-account', {
                     method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                 });
     
                 if (response.ok) {
-                    window.location.href = '/logout'; // Redirect to logout after deletion
+                    window.location.href = '/logout';
                 } else {
                     alert('Failed to delete account. Please try again.');
                 }
@@ -414,24 +493,21 @@
             }
         });
 
-        // Tab switching functionality
+        // Tab switching
         const tabButtons = document.querySelectorAll('.tab-btn');
         const tabContents = document.querySelectorAll('.tab-content');
         let suggestedPostsLoaded = false;
 
         tabButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
+            button.addEventListener('click', () => {
                 const tabName = button.getAttribute('data-tab');
 
-                // Remove active class from all buttons and contents
                 tabButtons.forEach(btn => btn.classList.remove('active'));
                 tabContents.forEach(content => content.classList.remove('active'));
 
-                // Add active class to clicked button and corresponding content
                 button.classList.add('active');
                 document.getElementById(tabName).classList.add('active');
 
-                // Load suggested posts when suggested tab is clicked
                 if (tabName === 'suggested' && !suggestedPostsLoaded) {
                     loadSuggestedPosts();
                     suggestedPostsLoaded = true;
@@ -439,7 +515,6 @@
             });
         });
 
-        // Load suggested posts
         function loadSuggestedPosts() {
             const container = document.getElementById('suggested-posts-container');
             
@@ -471,36 +546,27 @@
                         container.innerHTML = html;
                         initializeLikeButtons();
                     } else {
-                        container.innerHTML = '<div class="no-posts-message"><p>No suggested posts found. Start liking posts to get recommendations!</p></div>';
+                        container.innerHTML = '<div class="no-posts-message"><p>No suggested posts found yet!</p></div>';
                     }
                 })
                 .catch(error => {
                     console.error('Error loading suggested posts:', error);
-                    container.innerHTML = '<div class="no-posts-message"><p>Error loading suggested posts. Please try again.</p></div>';
+                    container.innerHTML = '<div class="no-posts-message"><p>Error loading posts</p></div>';
                 });
         }
 
-        // Like functionality
         function initializeLikeButtons() {
             document.querySelectorAll('.like-btn').forEach(button => {
-                // Remove previous event listeners
-                const newButton = button.cloneNode(true);
-                button.parentNode.replaceChild(newButton, button);
-
-                const postId = newButton.getAttribute('data-post-id');
+                const postId = button.getAttribute('data-post-id');
+                loadLikeState(postId, button);
                 
-                // Load initial like count and state
-                loadLikeState(postId, newButton);
-
-                // Add click handler
-                newButton.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevent card click event
-                    toggleLike(postId, newButton);
+                button.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleLike(postId, button);
                 });
             });
         }
 
-        // Initialize like buttons on page load
         initializeLikeButtons();
 
         function loadLikeState(postId, button) {
@@ -510,16 +576,12 @@
                     const icon = button.querySelector('i');
                     const count = button.querySelector('.like-count');
                     
-                    count.textContent = data.like_count;
+                    if (count) count.textContent = data.like_count || 0;
                     
                     if (data.user_liked) {
                         icon.classList.remove('far');
                         icon.classList.add('fas');
                         button.classList.add('liked');
-                    } else {
-                        icon.classList.add('far');
-                        icon.classList.remove('fas');
-                        button.classList.remove('liked');
                     }
                 })
                 .catch(error => console.error('Error loading like state:', error));
@@ -532,7 +594,7 @@
                     const icon = button.querySelector('i');
                     const count = button.querySelector('.like-count');
                     
-                    count.textContent = data.like_count;
+                    if (count) count.textContent = data.like_count || 0;
                     
                     if (data.liked) {
                         icon.classList.remove('far');
@@ -547,6 +609,5 @@
                 .catch(error => console.error('Error toggling like:', error));
         }
     </script>
-
 </body>
 </html>
