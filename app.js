@@ -2,67 +2,39 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const mysql = require('mysql2');
+const MySQLStore = require('express-mysql-session')(session);
 const path = require('path');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
-const { createClient } = require('redis');
-const connectRedis = require('connect-redis');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const RedisStore = connectRedis(session);
+// Create MySQL connection pool
+const db = mysql.createPool(process.env.MYSQL_URL);
 
-// Redis client
-const redisClient = createClient({
-  url: process.env.REDIS_URL
-});
+// Create MySQL session store
+const sessionStore = new MySQLStore({}, db.promise());
 
-redisClient.on("connect", () => {
-  console.log("Connected to Redis");
-});
+// Middleware
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
-redisClient.on("error", (err) => {
-  console.error("Redis error:", err);
-});
+app.use(
+  session({
+    key: 'storynode_session',
+    secret: process.env.SESSION_SECRET || "dev-storynode_super_secret_key_123",
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false, // set true if using HTTPS
+      maxAge: 1000 * 60 * 60 * 24
+    }
+  })
+);
 
-async function startServer() {
-  try {
-
-    await redisClient.connect();
-
-    const redisStore = new RedisStore({
-      client: redisClient
-    });
-
-    app.use(bodyParser.urlencoded({ extended: true }));
-    app.use(express.static(path.join(__dirname, 'public')));
-
-    app.use(
-      session({
-        store: redisStore,
-        secret: process.env.SESSION_SECRET,
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-          secure: false,
-          maxAge: 1000 * 60 * 60 * 24
-        }
-      })
-    );
-
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-
-  } catch (err) {
-    console.error("Failed to start server:", err);
-  }
-}
-
-startServer();
-
+// Database connection
 // Parse MYSQL_URL
 function parseConnectionString(url) {
     const urlObj = new URL(url);
