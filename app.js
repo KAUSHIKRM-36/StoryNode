@@ -204,49 +204,71 @@ app.get('/login', (req, res) => {
 
 // User Login - POST
 app.post('/login', (req, res) => {
-    console.log('\n========== LOGIN POST RECEIVED ==========');
-    console.log('Content-Type:', req.get('content-type'));
-    console.log('Full request body:', JSON.stringify(req.body));
-    console.log('Username field:', req.body.username);
-    console.log('Password field:', req.body.password);
-    console.log('=========================================\n');
+    console.log('\n===== LOGIN ATTEMPT =====');
+    const { username, password } = req.body;
+    
+    console.log('Username:', username);
+    console.log('Password provided:', password);
 
-    res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Debug Info</title>
-            <style>
-                body { font-family: Arial; padding: 20px; background: #f0f0f0; }
-                .box { background: white; padding: 20px; border-radius: 5px; margin: 10px 0; }
-                .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
-                .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
-                pre { background: #222; color: #0f0; padding: 10px; border-radius: 5px; overflow-x: auto; }
-            </style>
-        </head>
-        <body>
-            <div class="box success">
-                <h2>✅ LOGIN POST RECEIVED!</h2>
-                <p>The form data is reaching the server correctly.</p>
-            </div>
-            
-            <div class="box">
-                <h3>Received Data:</h3>
-                <pre>
-Username: ${req.body.username || 'NOT RECEIVED'}
-Password: ${req.body.password ? '(password received)' : 'NOT RECEIVED'}
-                </pre>
-            </div>
+    if (!username || !password) {
+        console.log('❌ Missing credentials');
+        return res.render('login', { 
+            error: 'Username and password are required.' 
+        });
+    }
 
-            <div class="box">
-                <h3>Raw Body:</h3>
-                <pre>${JSON.stringify(req.body, null, 2)}</pre>
-            </div>
+    console.log('🔍 Querying database for user:', username);
+    const query = 'SELECT id, username, password FROM users WHERE username = ?';
 
-            <a href="/login">← Back to Login</a>
-        </body>
-        </html>
-    `);
+    db.query(query, [username], (err, results) => {
+        if (err) {
+            console.error('❌ Database query error:', err);
+            return res.render('login', { 
+                error: 'Database error. Please try again.' 
+            });
+        }
+
+        console.log('Users found:', results.length);
+
+        if (results.length === 0) {
+            console.log('❌ User not found in database');
+            return res.render('login', { 
+                error: 'Invalid username or password.' 
+            });
+        }
+
+        const user = results[0];
+        console.log('✅ User found:', user.username);
+        console.log('Stored password hash:', user.password);
+        console.log('Hash starts with:', user.password.substring(0, 10));
+
+        console.log('🔑 Comparing passwords...');
+        console.log('Input password:', password);
+        
+        try {
+            const isPasswordValid = bcrypt.compareSync(password, user.password);
+            console.log('Comparison result:', isPasswordValid);
+
+            if (isPasswordValid) {
+                console.log('✅ PASSWORD MATCH - LOGIN SUCCESSFUL!');
+                req.session.userId = user.id;
+                req.session.username = user.username;
+                console.log('Session set. Redirecting to /dashboard');
+                return res.redirect('/dashboard');
+            } else {
+                console.log('❌ PASSWORD MISMATCH!');
+                console.log('Input password does not match stored hash');
+                return res.render('login', { 
+                    error: 'Invalid username or password.' 
+                });
+            }
+        } catch (compareErr) {
+            console.error('❌ Bcrypt comparison error:', compareErr);
+            return res.render('login', { 
+                error: 'Authentication error: ' + compareErr.message
+            });
+        }
+    });
 });
 
 // ========== DASHBOARD ROUTES ==========
