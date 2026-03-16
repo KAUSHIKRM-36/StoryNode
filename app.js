@@ -20,33 +20,29 @@ app.use(session({
 }));
 
 // Database connection
+console.log('MySQL Config:', {
+    host: process.env.MYSQL_HOST,
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD ? '***' : 'undefined',
+    database: process.env.MYSQL_DATABASE,
+    port: process.env.MYSQL_PORT
+});
+
 const db = mysql.createConnection({
     host: process.env.MYSQL_HOST,
     user: process.env.MYSQL_USER,
     password: process.env.MYSQL_PASSWORD,
     database: process.env.MYSQL_DATABASE,
     port: process.env.MYSQL_PORT || 3306,
+    host: 'mysql.railway.internal',
+    user: 'root',
+    password: 'mgLsyNFcNWXRAVmltePDBnJDNWkfenKs',
+    database: 'railway',
+    port: 3306,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
 });
-// Parse MYSQL_URL
-function parseConnectionString(url) {
-    const urlObj = new URL(url);
-    return {
-        host: urlObj.hostname,
-        user: urlObj.username,
-        password: urlObj.password,
-        database: urlObj.pathname.slice(1),
-        port: parseInt(urlObj.port) || 3306,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0
-    };
-}
-
-const connectionConfig = parseConnectionString(process.env.MYSQL_URL);
-const db = mysql.createConnection(connectionConfig);
 
 db.connect((err) => {
     if (err) {
