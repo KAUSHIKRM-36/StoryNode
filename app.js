@@ -175,44 +175,73 @@ app.get('/login', (req, res) => {
 
 // User Login - POST
 app.post('/login', (req, res) => {
+    console.log('\n===== LOGIN ATTEMPT =====');
+    console.log('Body received:', req.body);
+    
     const { username, password } = req.body;
     
-    // Validate input
+    console.log('Username:', username);
+    console.log('Password provided:', !!password);
+
     if (!username || !password) {
+        console.log('❌ Missing credentials');
         return res.render('login', { 
             error: 'Username and password are required.' 
         });
     }
     
+    console.log('🔍 Searching for user:', username);
     const query = 'SELECT id, username, password FROM users WHERE username = ?';
+    
     db.query(query, [username], (err, results) => {
         if (err) {
-            console.error('Login query error:', err);
+            console.error('❌ DATABASE ERROR:', err);
             return res.render('login', { 
-                error: 'Database error. Please try again.' 
+                error: 'Database error: ' + err.message
             });
         }
 
+        console.log('Users found:', results.length);
+        
         if (results.length === 0) {
-            console.log('❌ User not found:', username);
+            console.log('❌ No user found with username:', username);
             return res.render('login', { 
                 error: 'Invalid username or password' 
             });
         }
 
-        // Compare password
         const user = results[0];
-        const isPasswordValid = bcrypt.compareSync(password, user.password);
+        console.log('✅ User found:', user.username, '(ID:', user.id + ')');
 
-        if (isPasswordValid) {
-            req.session.userId = user.id;
-            req.session.username = user.username;
-            console.log('✅ Login successful:', username);
-            res.redirect('/dashboard');
-        } else {
-            console.log('❌ Invalid password for:', username);
+        try {
+            const isPasswordValid = bcrypt.compareSync(password, user.password);
+            console.log('🔑 Password valid:', isPasswordValid);
+
+            if (isPasswordValid) {
+                console.log('✅ LOGIN SUCCESSFUL!');
+                req.session.userId = user.id;
+                req.session.username = user.username;
+                req.session.save((err) => {
+                    if (err) {
+                        console.error('❌ Session save error:', err);
+                        return res.render('login', { 
+                            error: 'Session error: ' + err.message
+                        });
+                    }
+                    console.log('✅ Session saved. User ID:', req.session.userId);
+                    console.log('🔄 Redirecting to /dashboard');
+                    res.redirect('/dashboard');
+                });
+            } else {
+                console.log('❌ Password mismatch');
+                res.render('login', { 
+                    error: 'Invalid username or password' 
+                });
+            }
+        } catch (compareErr) {
+            console.error('❌ Bcrypt error:', compareErr);
             res.render('login', { 
-                error: 'Invalid username or password' 
+                error: 'Authentication error' 
             });
         }
     });
@@ -220,33 +249,58 @@ app.post('/login', (req, res) => {
 
 // Dashboard
 app.get('/dashboard', (req, res) => {
+    console.log('\n===== DASHBOARD ACCESS =====');
+    console.log('Session ID:', req.session.id);
+    console.log('User ID in session:', req.session.userId);
+    console.log('Username in session:', req.session.username);
+
     if (!req.session.userId) {
+        console.log('❌ No userId in session - redirecting to /login');
         return res.redirect('/login');
     }
 
     const userId = req.session.userId;
+    console.log('✅ User authenticated. Loading dashboard for user ID:', userId);
     
     // Get user details
     const userQuery = 'SELECT username FROM users WHERE id = ?';
     db.query(userQuery, [userId], (err, userResults) => {
-        if (err) return handleDatabaseError(err, res);
+        if (err) {
+            console.error('❌ User query error:', err);
+            return handleDatabaseError(err, res);
+        }
+
+        console.log('User query results:', userResults.length);
 
         if (userResults.length === 0) {
+            console.log('❌ User not found in database');
             req.session.destroy();
             return res.redirect('/login');
         }
 
         const username = userResults[0].username;
+        console.log('✅ User found:', username);
         
         // Get all posts
         const allPostsQuery = 'SELECT * FROM posts ORDER BY id DESC';
         db.query(allPostsQuery, (err, allPostResults) => {
-            if (err) return handleDatabaseError(err, res);
+            if (err) {
+                console.error('❌ All posts query error:', err);
+                return handleDatabaseError(err, res);
+            }
+
+            console.log('All posts found:', allPostResults.length);
             
             // Get user's posts
             const postsQuery = 'SELECT * FROM posts WHERE user_id = ? ORDER BY id DESC';
             db.query(postsQuery, [userId], (err, postResults) => {
-                if (err) return handleDatabaseError(err, res);
+                if (err) {
+                    console.error('❌ User posts query error:', err);
+                    return handleDatabaseError(err, res);
+                }
+
+                console.log('User posts found:', postResults.length);
+                console.log('✅ Rendering dashboard');
                 
                 res.render('dashboard', { 
                     posts: postResults || [],
